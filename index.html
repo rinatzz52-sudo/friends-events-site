@@ -4,120 +4,127 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Сходки & Сборы</title>
-
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase JS -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Подключаем официальную библиотеку Supabase для работы с базой данных из браузера -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
+<body>
 
-  <!-- ШАПКА САЙТА -->
-  <header class="bg-slate-800 border-b border-slate-700 py-4 px-6 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-emerald-400 flex items-center gap-2">
-      <span>⚽</span> Сходки & Сборы
-    </h1>
+  <!-- ВЕРХНЯЯ ПАНЕЛЬ (ШАПКА САЙТА) -->
+  <header class="header">
+    <div class="logo">⚽ Сходки & Сборы</div>
+    <div class="header-actions">
+      <!-- Кнопка быстрой копировки ссылки на сайт -->
+      <button id="inviteBtn" class="btn btn-secondary">🔗 Пригласить друга</button>
 
-    <div id="auth-status" class="flex items-center gap-4">
-      <!-- Кнопка войти / имя профиля подгружается из JS -->
+      <!-- Блок профиля: виден только когда пользователь ВОШЕЛ в аккаунт -->
+      <div id="userProfile" class="user-profile hidden">
+        <span id="userName">Пользователь</span>
+        <button id="logoutBtn" class="btn btn-outline">Выйти</button>
+      </div>
+
+      <!-- Кнопка входа: видна только когда пользователь НЕ авторизован -->
+      <button id="authBtn" class="btn btn-primary">Войти / Регистрация</button>
     </div>
   </header>
 
-  <!-- ОСНОВНОЙ КОНТЕНТ -->
-  <main class="max-w-5xl mx-auto p-6">
-
-    <!-- Заголовок и кнопка создания -->
-    <div class="flex justify-between items-center mb-8">
-      <h2 class="text-2xl font-bold">Предстоящие встречи</h2>
-      <button id="open-create-modal-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg transition">
-        + Создать ивент
-      </button>
+  <!-- ОСНОВНОЙ КОНТЕНТ СТРАНИЦЫ -->
+  <main class="container">
+    
+    <!-- Заголовок раздела и кнопка создания ивента -->
+    <div class="events-header">
+      <h2>Встречи</h2>
+      <!-- Кнопка доступна только авторизованным пользователям -->
+      <button id="createEventBtn" class="btn btn-primary hidden">+ Создать ивент</button>
     </div>
 
-    <!-- Контейнер карточек -->
-    <div id="events-list" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <p class="text-slate-400 col-span-2">Загрузка встреч...</p>
-    </div>
+    <!-- ПАНЕЛЬ ФИЛЬТРОВ И АРХИВА -->
+    <div class="filters-bar">
+      <!-- Кнопки переключения категорий (data-category используется в JS для фильтрации) -->
+      <div class="categories-tabs" id="categoryFilters">
+        <button class="tab-btn active" data-category="all">Все</button>
+        <button class="tab-btn" data-category="Спорт">⚽ Спорт</button>
+        <button class="tab-btn" data-category="Игры">🎮 Игры</button>
+        <button class="tab-btn" data-category="Поездки">🚗 Поездки</button>
+        <button class="tab-btn" data-category="Встречи">🍕 Встречи</button>
+      </div>
 
-  </main>
-
-  <!-- МОДАЛЬНОЕ ОКНО: Авторизация / Регистрация -->
-  <div id="auth-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden p-4 z-50">
-    <div class="bg-slate-800 p-6 rounded-xl w-full max-w-md border border-slate-700">
-      <h3 id="auth-modal-title" class="text-xl font-bold mb-4">Вход в аккаунт</h3>
-
-      <form id="auth-form" class="space-y-4">
-        <div id="username-field-group" class="hidden">
-          <label class="block text-sm font-medium mb-1">Ваше Имя</label>
-          <input type="text" id="auth-username" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" placeholder="Ринат">
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-1">Email</label>
-          <input type="email" id="auth-email" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" placeholder="name@example.com">
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-1">Пароль</label>
-          <input type="password" id="auth-password" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" placeholder="••••••••">
-        </div>
-
-        <button type="submit" id="auth-submit-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 py-2.5 rounded-lg font-medium transition">
-          Войти
-        </button>
-      </form>
-
-      <div class="mt-4 text-center text-sm text-slate-400">
-        <span id="auth-toggle-text">Нет аккаунта?</span>
-        <button id="auth-toggle-btn" class="text-emerald-400 hover:underline font-medium ml-1">Зарегистрироваться</button>
+      <!-- Кнопка переключения между активными ивентами и архивом прошедших -->
+      <div class="archive-toggle">
+        <button id="toggleArchiveBtn" class="btn btn-sm btn-outline">📁 Архив</button>
       </div>
     </div>
+
+    <!-- СЕТКА КАРТОЧЕК: Сюда JavaScript будет динамически вставлять карточки встреч -->
+    <div id="eventsList" class="events-grid"></div>
+  </main>
+
+  <!-- МОДАЛЬНОЕ ОКНО: Авторизация и Регистрация -->
+  <div id="authModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn" id="closeAuthModal">&times;</span>
+      <h3 id="modalTitle">Вход в аккаунт</h3>
+      <form id="authForm">
+        <!-- Поле "Имя" показывается только при регистрации -->
+        <div class="form-group" id="nameGroup">
+          <label>Ваше Имя</label>
+          <input type="text" id="authName" placeholder="Иван">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="authEmail" required placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="authPassword" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="authSubmitBtn">Войти</button>
+      </form>
+      <!-- Переключатель между Входом и Регистрацией -->
+      <p class="toggle-auth">
+        <span id="toggleAuthText">Нет аккаунта?</span> 
+        <a href="#" id="toggleAuthLink">Зарегистрироваться</a>
+      </p>
+    </div>
   </div>
 
-  <!-- МОДАЛЬНОЕ ОКНО: Создание ивента -->
-  <div id="create-event-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden p-4 z-50">
-    <div class="bg-slate-800 p-6 rounded-xl w-full max-w-md border border-slate-700">
-      <h3 class="text-xl font-bold mb-4">Новая встреча</h3>
-
-      <form id="create-event-form" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">Название встречи</label>
-          <input type="text" id="event-title" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" placeholder="Покер у Рината">
+  <!-- МОДАЛЬНОЕ ОКНО: Создание нового ивента -->
+  <div id="eventModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn" id="closeEventModal">&times;</span>
+      <h3>Создать новую встречу</h3>
+      <form id="eventForm">
+        <div class="form-group">
+          <label>Название встречи</label>
+          <input type="text" id="eventTitle" required placeholder="Например: Турнир по FIFA">
         </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-1">Категория</label>
-          <select id="event-category" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white">
-            <option value="poker">🃏 Покер</option>
-            <option value="fifa">🎮 FIFA / FC</option>
-            <option value="karting">🏎️ Картинг</option>
-            <option value="gym">🏋️‍♂️ Тренажерка</option>
-            <option value="other">📌 Другое</option>
+        <div class="form-group">
+          <label>Категория</label>
+          <select id="eventCategory" required>
+            <option value="Спорт">⚽ Спорт</option>
+            <option value="Игры">🎮 Игры</option>
+            <option value="Поездки">🚗 Поездки</option>
+            <option value="Встречи">🍕 Встречи</option>
           </select>
         </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-1">Дата и время</label>
-          <input type="datetime-local" id="event-date" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white">
+        <div class="form-group">
+          <label>Дата и время</label>
+          <input type="datetime-local" id="eventDate" required>
         </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-1">Описание / Место</label>
-          <textarea id="event-description" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white h-20" placeholder="Собираемся в 19:00"></textarea>
+        <div class="form-group">
+          <label>Описание</label>
+          <textarea id="eventDescription" rows="3" placeholder="Детали встречи, где собираемся..."></textarea>
         </div>
-
-        <div class="flex gap-3 pt-2">
-          <button type="button" id="close-create-modal-btn" class="w-1/2 bg-slate-700 hover:bg-slate-600 py-2.5 rounded-lg font-medium transition">
-            Отмена
-          </button>
-          <button type="submit" class="w-1/2 bg-emerald-500 hover:bg-emerald-600 py-2.5 rounded-lg font-medium transition">
-            Создать
-          </button>
-        </div>
+        <button type="submit" class="btn btn-primary btn-full">Опубликовать</button>
       </form>
     </div>
   </div>
 
+  <!-- УВЕДОМЛЕНИЕ (Toast): Показывается при скопированной ссылке -->
+  <div id="toast" class="toast hidden">Ссылка скопирована в буфер обмена!</div>
+
+  <!-- Подключаем наш скрипт логики -->
   <script src="app.js"></script>
 </body>
 </html>

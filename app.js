@@ -1,246 +1,399 @@
-// ИНИЦИАЛИЗАЦИЯ SUPABASE
-const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co'; 
-const SUPABASE_ANON_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb'; 
+// ==========================================
+// 1. ИНИЦИАЛИЗАЦИЯ И НАСТРОЙКА SUPABASE
+// ==========================================
+// Адрес вашего проекта Supabase
+const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
 
-// Используем имя supabaseClient, чтобы не было конфликта с глобальным объектом supabase
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ⚠️ Переменная переименована в supabaseClient, чтобы не было конфликта с глобальным объектом supabase
+const SUPABASE_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb'; 
 
-// ЭЛЕМЕНТЫ DOM
-const authStatusEl = document.getElementById('auth-status');
-const authModal = document.getElementById('auth-modal');
-const authForm = document.getElementById('auth-form');
-const authModalTitle = document.getElementById('auth-modal-title');
-const authSubmitBtn = document.getElementById('auth-submit-btn');
-const authToggleBtn = document.getElementById('auth-toggle-btn');
-const authToggleText = document.getElementById('auth-toggle-text');
-const usernameFieldGroup = document.getElementById('username-field-group');
+// Создаем подключение к базе данных под именем supabaseClient
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const createEventModal = document.getElementById('create-event-modal');
-const createEventForm = document.getElementById('create-event-form');
-const openCreateModalBtn = document.getElementById('open-create-modal-btn');
-const closeCreateModalBtn = document.getElementById('close-create-modal-btn');
-const eventsListEl = document.getElementById('events-list');
+// ==========================================
+// 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ СОСТОЯНИЯ
+// ==========================================
+let currentUser = null;       // Текущий пользователь (null если не вошел)
+let currentCategory = 'all';  // Фильтр категории ('all', 'Спорт' и т.д.)
+let showArchive = false;      // Показ архива (true/false)
+let allEvents = [];           // Данные ивентов из базы данных
+let isSignUp = false;         // Режим формы: false = Вход, true = Регистрация
 
-let currentUser = null;
-let isSignUpMode = false;
+// ==========================================
+// 3. ПОЛУЧЕНИЕ ЭЛЕМЕНТОВ СТРАНИЦЫ (DOM)
+// ==========================================
+const authBtn = document.getElementById('authBtn');
+const authModal = document.getElementById('authModal');
+const closeAuthModal = document.getElementById('closeAuthModal');
+const authForm = document.getElementById('authForm');
+const modalTitle = document.getElementById('modalTitle');
+const nameGroup = document.getElementById('nameGroup');
+const authName = document.getElementById('authName');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const toggleAuthLink = document.getElementById('toggleAuthLink');
+const toggleAuthText = document.getElementById('toggleAuthText');
 
-// 1. ПРОВЕРКА СЕССИИ И АВТОРИЗАЦИИ
-async function checkUserSession() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  currentUser = session?.user || null;
-  renderAuthHeader();
+const userProfile = document.getElementById('userProfile');
+const userNameSpan = document.getElementById('userName');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const createEventBtn = document.getElementById('createEventBtn');
+const eventModal = document.getElementById('eventModal');
+const closeEventModal = document.getElementById('closeEventModal');
+const eventForm = document.getElementById('eventForm');
+
+const eventsList = document.getElementById('eventsList');
+const categoryFilters = document.getElementById('categoryFilters');
+const toggleArchiveBtn = document.getElementById('toggleArchiveBtn');
+const inviteBtn = document.getElementById('inviteBtn');
+const toast = document.getElementById('toast');
+
+// ==========================================
+// 4. ЗАПУСК ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Навешиваем слушатели событий на кнопки СРАЗУ, чтобы интерфейс реагировал на клики
+  setupEventListeners();
+
+  // Загружаем данные о сессии пользователя и список встреч
+  checkUser();
   loadEvents();
-}
-
-function renderAuthHeader() {
-  if (currentUser) {
-    const username = currentUser.user_metadata?.username || currentUser.email;
-    authStatusEl.innerHTML = `
-      <span class="text-slate-300">👋 ${username}</span>
-      <button id="logout-btn" class="bg-slate-700 hover:bg-slate-600 text-sm py-1.5 px-3 rounded-lg transition">
-        Выйти
-      </button>
-    `;
-    document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
-  } else {
-    authStatusEl.innerHTML = `
-      <button id="open-auth-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-1.5 px-3 rounded-lg transition text-sm">
-        Войти / Регистрация
-      </button>
-    `;
-    document.getElementById('open-auth-btn')?.addEventListener('click', openAuthModal);
-  }
-}
-
-// 2. МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ
-function openAuthModal() {
-  authModal?.classList.remove('hidden');
-}
-
-function closeAuthModal() {
-  authModal?.classList.add('hidden');
-}
-
-authToggleBtn?.addEventListener('click', () => {
-  isSignUpMode = !isSignUpMode;
-  if (isSignUpMode) {
-    authModalTitle.textContent = 'Регистрация';
-    authSubmitBtn.textContent = 'Зарегистрироваться';
-    authToggleText.textContent = 'Уже есть аккаунт?';
-    authToggleBtn.textContent = 'Войти';
-    usernameFieldGroup.classList.remove('hidden');
-  } else {
-    authModalTitle.textContent = 'Вход в аккаунт';
-    authSubmitBtn.textContent = 'Войти';
-    authToggleText.textContent = 'Нет аккаунта?';
-    authToggleBtn.textContent = 'Зарегистрироваться';
-    usernameFieldGroup.classList.add('hidden');
-  }
 });
 
-authForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('auth-email').value;
-  const password = document.getElementById('auth-password').value;
-  const username = document.getElementById('auth-username').value;
+// ==========================================
+// 5. РАБОТА С АВТОРИЗАЦИЕЙ И СЕССИЕЙ
+// ==========================================
 
-  if (isSignUpMode) {
-    const { error } = await supabaseClient.auth.signUp({
-      email,
-      password,
-      options: { data: { username } }
-    });
-    if (error) alert('Ошибка регистрации: ' + error.message);
-    else {
-      alert('Регистрация успешна!');
-      closeAuthModal();
-      checkUserSession();
+// Проверка: вошел ли пользователь в систему ранее
+async function checkUser() {
+  try {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+
+    if (session) {
+      currentUser = session.user;
+      // Берём имя пользователя из метаданных или логин из email
+      const name = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+      userNameSpan.textContent = name;
+      
+      // Отображаем элементы для авторизованного пользователя
+      userProfile.classList.remove('hidden');
+      authBtn.classList.add('hidden');
+      createEventBtn.classList.remove('hidden');
+    } else {
+      currentUser = null;
+      userProfile.classList.add('hidden');
+      authBtn.classList.remove('hidden');
+      createEventBtn.classList.add('hidden');
     }
-  } else {
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) alert('Ошибка входа: ' + error.message);
-    else {
-      closeAuthModal();
-      checkUserSession();
-    }
+  } catch (err) {
+    console.error('Ошибка проверки пользователя:', err.message);
   }
-});
-
-async function handleLogout() {
-  await supabaseClient.auth.signOut();
-  currentUser = null;
-  checkUserSession();
 }
 
-// 3. УПРАВЛЕНИЕ ИВЕНТАМИ
-openCreateModalBtn?.addEventListener('click', () => {
-  if (!currentUser) {
-    alert('Сначала войдите в аккаунт!');
-    openAuthModal();
+// ==========================================
+// 6. ЗАГРУЗКА И ФИЛЬТРАЦИЯ ИВЕНТОВ
+// ==========================================
+
+// Запрос списка встреч из таблицы 'events'
+async function loadEvents() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('events')
+      .select('*')
+      .order('event_date', { ascending: true });
+
+    if (error) throw error;
+
+    allEvents = data || [];
+    renderEvents(); // Вызываем отрисовку карточек
+  } catch (err) {
+    console.error('Ошибка при загрузке встреч:', err.message);
+    eventsList.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 2rem;">
+      Ошибка подключения к базе. Проверьте правильность anon key.
+    </p>`;
+  }
+}
+
+// Отрисовка карточек встреч в интерфейсе
+function renderEvents() {
+  eventsList.innerHTML = '';
+  const now = new Date();
+
+  // Отбор ивентов под текущие фильтры
+  const filtered = allEvents.filter(event => {
+    const eventDate = new Date(event.event_date);
+    const isPast = eventDate < now;
+
+    // 1. Фильтр по архиву/предстоящим
+    if (showArchive) {
+      if (!isPast) return false;
+    } else {
+      if (isPast) return false;
+    }
+
+    // 2. Фильтр по выбранной категории
+    if (currentCategory !== 'all' && event.category !== currentCategory) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Заглушка, если ничего не найдено
+  if (filtered.length === 0) {
+    eventsList.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #94a3b8; padding: 2rem;">
+      ${showArchive ? 'Архив прошедших встреч пуст' : 'Нет предстоящих встреч в этой категории'}
+    </p>`;
     return;
   }
-  createEventModal?.classList.remove('hidden');
-});
 
-closeCreateModalBtn?.addEventListener('click', () => {
-  createEventModal?.classList.add('hidden');
-});
+  // Генерация HTML-кода для каждой карточки
+  filtered.forEach(event => {
+    const isCreator = currentUser && event.creator_id === currentUser.id;
+    const participants = event.participants || [];
+    const isJoined = currentUser && participants.includes(currentUser.id);
 
-createEventForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const title = document.getElementById('event-title').value;
-  const category = document.getElementById('event-category').value;
-  const event_date = document.getElementById('event-date').value;
-  const description = document.getElementById('event-description').value;
+    const dateStr = new Date(event.event_date).toLocaleString('ru-RU', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+    });
 
-  const { error } = await supabaseClient.from('events').insert([
-    {
-      title,
-      category,
-      event_date,
-      description,
-      creator_id: currentUser.id,
-      participants: [currentUser.id]
-    }
-  ]);
+    const card = document.createElement('div');
+    card.className = `event-card ${showArchive ? 'archived' : ''}`;
+    card.innerHTML = `
+      <div class="event-header">
+        <div>
+          <h3 class="event-title">${escapeHtml(event.title)}</h3>
+          <span class="event-creator">от ${escapeHtml(event.creator_name || 'Аноним')}</span>
+        </div>
+        <span class="event-category">${escapeHtml(event.category)}</span>
+      </div>
+      <div class="event-date">📅 ${dateStr}</div>
+      <p class="event-description">${escapeHtml(event.description || '')}</p>
+      
+      <div class="event-footer">
+        <span class="participants-count">👥 Участников: ${participants.length}</span>
+        <div class="card-actions">
+          ${!showArchive && currentUser ? `
+            <button class="btn btn-sm ${isJoined ? 'btn-danger' : 'btn-primary'}" onclick="toggleParticipation('${event.id}')">
+              ${isJoined ? 'Отменить участие' : 'Пойду'}
+            </button>
+          ` : ''}
+          
+          ${isCreator ? `
+            <button class="btn btn-sm btn-outline" style="color: #ef4444; border-color: #ef4444;" onclick="deleteEvent('${event.id}')">Удалить</button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    eventsList.appendChild(card);
+  });
+}
+
+// ==========================================
+// 7. ДЕЙСТВИЯ: ЗАПИСЬ, УДАЛЕНИЕ, СОЗДАНИЕ
+// ==========================================
+
+// Запись или отмена участия
+window.toggleParticipation = async function(eventId) {
+  if (!currentUser) return;
+
+  const event = allEvents.find(e => e.id === eventId);
+  if (!event) return;
+
+  let participants = event.participants || [];
+  if (participants.includes(currentUser.id)) {
+    participants = participants.filter(id => id !== currentUser.id);
+  } else {
+    participants.push(currentUser.id);
+  }
+
+  const { error } = await supabaseClient
+    .from('events')
+    .update({ participants })
+    .eq('id', eventId);
 
   if (error) {
-    alert('Ошибка при создании встречи: ' + error.message);
+    alert('Ошибка при изменении участия: ' + error.message);
   } else {
-    createEventModal?.classList.add('hidden');
-    createEventForm.reset();
+    loadEvents();
+  }
+};
+
+// Удаление встречи создателем
+window.deleteEvent = async function(eventId) {
+  if (!confirm('Вы точно хотите удалить эту встречу?')) return;
+
+  const { error } = await supabaseClient
+    .from('events')
+    .delete()
+    .eq('id', eventId);
+
+  if (error) {
+    alert('Ошибка при удалении: ' + error.message);
+  } else {
+    loadEvents();
+  }
+};
+
+// Отправка формы создания новой встречи
+eventForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!currentUser) return;
+
+  const creatorName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+
+  const newEvent = {
+    title: document.getElementById('eventTitle').value,
+    category: document.getElementById('eventCategory').value,
+    event_date: document.getElementById('eventDate').value,
+    description: document.getElementById('eventDescription').value,
+    creator_id: currentUser.id,
+    creator_name: creatorName,
+    participants: [currentUser.id]
+  };
+
+  const { error } = await supabaseClient.from('events').insert([newEvent]);
+
+  if (error) {
+    alert('Ошибка создания ивента: ' + error.message);
+  } else {
+    eventModal.classList.add('hidden');
+    eventForm.reset();
     loadEvents();
   }
 });
 
-// 4. ЗАГРУЗКА И ОТОБРАЖЕНИЕ ИВЕНТОВ
-async function loadEvents() {
-  const { data: events, error } = await supabaseClient
-    .from('events')
-    .select('*')
-    .order('event_date', { ascending: true });
-
-  if (error) {
-    console.error('Ошибка загрузки:', error);
-    eventsListEl.innerHTML = `<p class="text-red-400 col-span-2">Ошибка загрузки встреч</p>`;
-    return;
-  }
-
-  if (!events || events.length === 0) {
-    eventsListEl.innerHTML = `<p class="text-slate-400 col-span-2">Пока нет созданных встреч. Будьте первым!</p>`;
-    return;
-  }
-
-  eventsListEl.innerHTML = events.map(event => {
-    const date = new Date(event.event_date).toLocaleString('ru-RU', {
-      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+// ==========================================
+// 8. НАВЕШИВАНИЕ ОБРАБОТЧИКОВ СОБЫТИЙ (КЛИКИ)
+// ==========================================
+function setupEventListeners() {
+  
+  // Открытие модального окна входа
+  if (authBtn) {
+    authBtn.addEventListener('click', () => {
+      authModal.classList.remove('hidden');
     });
+  }
 
-    const isParticipating = currentUser && event.participants?.includes(currentUser.id);
-    const count = event.participants ? event.participants.length : 0;
+  // Закрытие модального окна входа
+  if (closeAuthModal) {
+    closeAuthModal.addEventListener('click', () => {
+      authModal.classList.add('hidden');
+    });
+  }
 
-    return `
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col justify-between">
-        <div>
-          <div class="flex justify-between items-start mb-2">
-            <h3 class="text-lg font-bold text-white">${event.title}</h3>
-            <span class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-600">
-              ${event.category}
-            </span>
-          </div>
-          <p class="text-emerald-400 text-sm font-medium mb-3">📅 ${date}</p>
-          <p class="text-slate-300 text-sm mb-4">${event.description || 'Без описания'}</p>
-        </div>
+  // Открытие модального окна создания ивента
+  if (createEventBtn) {
+    createEventBtn.addEventListener('click', () => {
+      eventModal.classList.remove('hidden');
+    });
+  }
 
-        <div class="flex justify-between items-center pt-3 border-t border-slate-700/50 mt-2">
-          <span class="text-xs text-slate-400">👥 Участников: ${count}</span>
-          <button 
-            onclick="toggleParticipation('${event.id}', ${isParticipating})" 
-            class="text-sm px-3 py-1.5 rounded-lg font-medium transition ${
-              isParticipating 
-                ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30' 
-                : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-            }"
-          >
-            ${isParticipating ? 'Отменить участие' : 'Пойду'}
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
+  // Закрытие модального окна создания ивента
+  if (closeEventModal) {
+    closeEventModal.addEventListener('click', () => {
+      eventModal.classList.add('hidden');
+    });
+  }
+
+  // Клик по вкладкам категорий
+  if (categoryFilters) {
+    categoryFilters.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab-btn');
+      if (btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategory = btn.dataset.category;
+        renderEvents();
+      }
+    });
+  }
+
+  // ПереключениеАрхив / Предстоящие
+  if (toggleArchiveBtn) {
+    toggleArchiveBtn.addEventListener('click', () => {
+      showArchive = !showArchive;
+      toggleArchiveBtn.textContent = showArchive ? '◀ Предстоящие' : '📁 Архив';
+      renderEvents();
+    });
+  }
+
+  // Кнопка копирования ссылки
+  if (inviteBtn) {
+    inviteBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(window.location.href);
+      showToast();
+    });
+  }
+
+  // Переключение между Входом и Регистрацией
+  if (toggleAuthLink) {
+    toggleAuthLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      isSignUp = !isSignUp;
+      modalTitle.textContent = isSignUp ? 'Регистрация' : 'Вход в аккаунт';
+      authSubmitBtn.textContent = isSignUp ? 'Зарегистрироваться' : 'Войти';
+      nameGroup.classList.toggle('hidden', !isSignUp);
+      toggleAuthText.textContent = isSignUp ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
+      toggleAuthLink.textContent = isSignUp ? 'Войти' : 'Зарегистрироваться';
+    });
+  }
+
+  // Отправка формы авторизации / регистрации
+  if (authForm) {
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = authEmail.value;
+      const password = authPassword.value;
+
+      if (isSignUp) {
+        const name = authName.value;
+        const { error } = await supabaseClient.auth.signUp({
+          email, password,
+          options: { data: { full_name: name } }
+        });
+        if (error) alert('Ошибка регистрации: ' + error.message);
+        else { 
+          alert('Успешная регистрация! Теперь войдите в аккаунт.'); 
+          authModal.classList.add('hidden'); 
+          checkUser(); 
+        }
+      } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) alert('Ошибка входа: ' + error.message);
+        else { 
+          authModal.classList.add('hidden'); 
+          await checkUser(); 
+          await loadEvents(); 
+        }
+      }
+    });
+  }
+
+  // Выход из профиля
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await supabaseClient.auth.signOut();
+      await checkUser();
+      await loadEvents();
+    });
+  }
 }
 
-// 5. УЧАСТИЕ В ИВЕНТЕ
-window.toggleParticipation = async (eventId, isParticipating) => {
-  if (!currentUser) {
-    alert('Сначала войдите в аккаунт!');
-    openAuthModal();
-    return;
-  }
+// Показ всплывающего сообщения Toast
+function showToast() {
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+}
 
-  const { data: event } = await supabaseClient.from('events').select('participants').eq('id', eventId).single();
-  let participants = event?.participants || [];
-
-  if (isParticipating) {
-    participants = participants.filter(id => id !== currentUser.id);
-  } else {
-    if (!participants.includes(currentUser.id)) {
-      participants.push(currentUser.id);
-    }
-  }
-
-  await supabaseClient.from('events').update({ participants }).eq('id', eventId);
-  loadEvents();
-};
-
-// Закрытие модалок по клику на фон
-authModal?.addEventListener('click', (e) => {
-  if (e.target === authModal) closeAuthModal();
-});
-createEventModal?.addEventListener('click', (e) => {
-  if (e.target === createEventModal) createEventModal.classList.add('hidden');
-});
-
-// Запуск при старте
-checkUserSession();
+// Защита от XSS-атак
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
