@@ -92,6 +92,13 @@ body {
   gap: 1.5rem;
 }
 
+/* Предотвращает автозум на мобильных устройствах */
+input, 
+select, 
+textarea {
+  font-size: 16px !important;
+}
+
 /* Карточка ивента */
 .event-card {
   background-color: #1e293b;
