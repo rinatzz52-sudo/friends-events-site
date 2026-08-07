@@ -262,3 +262,91 @@ textarea {
   z-index: 2000;
   transition: opacity 0.3s;
 }
+/* Базовые стили сброса масштаба */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* Фикс масштабирования чата и полей ввода на мобильных телефонах (iOS/Android) */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+textarea,
+select,
+.chat-input {
+    font-size: 16px !important; /* При 16px и выше мобильные браузеры не делают автозум */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Стили контейнера чата */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.chat-input-area {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #fff;
+}
+/* Базовые стили сброса масштаба */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* Фикс масштабирования чата и полей ввода на мобильных телефонах (iOS/Android) */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+textarea,
+select,
+.chat-input {
+    font-size: 16px !important; /* При 16px и выше мобильные браузеры не делают автозум */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Стили контейнера чата */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.chat-input-area {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #fff;
+}

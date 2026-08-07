@@ -267,6 +267,7 @@ function renderEvents() {
   eventsList.innerHTML = filteredEvents.map(event => {
     const participants = Array.isArray(event.participants) ? event.participants : [];
     const isAttending = currentUser && participants.includes(currentUserName);
+    const isCreator = currentUser && event.creator_id === currentUser.id;
 
     const formattedParticipantsHtml = participants.length > 0
       ? `<div style="margin-top: 0.8rem;">
@@ -281,10 +282,13 @@ function renderEvents() {
       : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался</div>`;
 
     return `
-      <div class="event-card" style="background: #1e293b; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #334155;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div class="event-card" style="background: #1e293b; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #334155; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
           <h3 style="margin: 0; font-size: 1.25rem;">${escapeHtml(event.title)}</h3>
-          <span class="category-tag" style="background: #334155; padding: 0.25rem 0.6rem; border-radius: 0.5rem; font-size: 0.85rem;">${escapeHtml(event.category)}</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="category-tag" style="background: #334155; padding: 0.25rem 0.6rem; border-radius: 0.5rem; font-size: 0.85rem;">${escapeHtml(event.category)}</span>
+            ${isCreator ? `<button onclick="deleteEvent('${event.id}')" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.8rem;" title="Удалить встречу">🗑</button>` : ''}
+          </div>
         </div>
         
         <p style="color: #94a3b8; font-size: 0.875rem; margin: 0.25rem 0 0.75rem 0;">
@@ -320,8 +324,27 @@ function renderEvents() {
 }
 
 // ==========================================
-// ЛОГИКА ЗАПИСИ
+// ЛОГИКА УДАЛЕНИЯ И ЗАПИСИ
 // ==========================================
+
+window.deleteEvent = async function(eventId) {
+  if (!confirm('Вы уверены, что хотите удалить эту встречу?')) return;
+
+  try {
+    // 1. Удаляем связанные сообщения в чате
+    await supabaseClient.from('event_messages').delete().eq('event_id', eventId);
+
+    // 2. Удаляем сам ивент
+    const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
+    if (error) throw error;
+
+    showToast('Встреча успешно удалена');
+    await loadEvents();
+  } catch (err) {
+    alert('Не удалось удалить встречу: ' + err.message);
+  }
+};
+
 window.toggleAttendance = async function(eventId, currentParticipants = []) {
   if (!currentUser) {
     if (authModal) authModal.classList.remove('hidden');
@@ -667,7 +690,6 @@ async function subscribeUserToPush() {
     });
 
     if (currentUser && supabaseClient) {
-      // Исправленная отправка JSON-объекта подписки в Supabase
       const { error } = await supabaseClient
         .from('user_push_subscriptions')
         .upsert(
