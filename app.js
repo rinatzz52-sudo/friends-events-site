@@ -30,6 +30,7 @@ const eventsList = document.getElementById('eventsList');
 const categoryFilters = document.getElementById('categoryFilters');
 const createEventBtn = document.getElementById('createEventBtn');
 const inviteBtn = document.getElementById('inviteBtn');
+const enablePushBtn = document.getElementById('enablePushBtn');
 const toast = document.getElementById('toast');
 
 // Профиль и Авторизация
@@ -131,6 +132,9 @@ async function initAuth() {
       currentUser = session?.user || null;
       updateUserUI();
       renderEvents();
+      if (currentUser && Notification.permission === 'granted') {
+        subscribeUserToPush();
+      }
     });
   } catch (err) {
     console.error('Ошибка проверки сессии:', err);
@@ -431,7 +435,6 @@ function renderMessages(messages) {
   chatMessagesContainer.innerHTML = messages.map(msg => {
     const isMine = currentUser && msg.user_id === currentUser.id;
     
-    // Приоритет имени: user_name -> отображаемое имя текущего пользователя (если моё) -> имя из email
     let authorName = msg.user_name;
     if (!authorName && isMine) {
       authorName = getUserDisplayName(currentUser);
@@ -526,7 +529,6 @@ function subscribeToChatMessages(eventId) {
     .subscribe();
 }
 
-// Глобальное делегирование кликов для открытия чата
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.open-chat-btn');
   if (btn) {
@@ -593,7 +595,7 @@ if (createEventBtn) {
 
 if (closeEventModal) {
   closeEventModal.addEventListener('click', () => {
-    if (eventModal) eventModal.classList.remove('hidden');
+    if (eventModal) eventModal.classList.add('hidden');
   });
 }
 
@@ -601,6 +603,12 @@ if (inviteBtn) {
   inviteBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(window.location.href);
     showToast('Ссылка скопирована в буфер обмена!');
+  });
+}
+
+if (enablePushBtn) {
+  enablePushBtn.addEventListener('click', () => {
+    requestNotificationPermission();
   });
 }
 
@@ -614,6 +622,85 @@ if (categoryFilters) {
       renderEvents();
     });
   });
+}
+
+// ==========================================
+// PUSH-УВЕДОМЛЕНИЯ (SERVICE WORKER & VAPID)
+// ==========================================
+
+const PUBLIC_VAPID_KEY = 'BCfHpBIiAi9L6FdqJoBc5rueeMujPNsEJjtVDQ4hsRKkjsgJCCxfLmk5iBxltOIWfTJ85vCTsGqzf_hSedRO7iM';
+
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('Service Worker успешно зарегистрирован:', registration.scope);
+    } catch (err) {
+      console.error('Ошибка регистрации Service Worker:', err);
+    }
+  });
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) {
+    alert('Ваш браузер не поддерживает push-уведомления.');
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  
+  if (permission === 'granted') {
+    showToast('Уведомления успешно включены!');
+    await subscribeUserToPush();
+  } else if (permission === 'denied') {
+    alert('Вы запретили уведомления в настройках браузера.');
+  }
+}
+
+async function subscribeUserToPush() {
+  try {
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+    });
+
+    if (currentUser && supabaseClient) {
+      // Исправленная отправка JSON-объекта подписки в Supabase
+      const { error } = await supabaseClient
+        .from('user_push_subscriptions')
+        .upsert(
+          [
+            {
+              user_id: currentUser.id,
+              subscription_json: subscription.toJSON(),
+              updated_at: new Date().toISOString()
+            }
+          ],
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Ошибка сохранения подписки в Supabase:', error);
+      } else {
+        console.log('Пуш-подписка успешно сохранена в Supabase');
+      }
+    }
+  } catch (err) {
+    console.error('Ошибка подписки на Push:', err);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 // ==========================================
