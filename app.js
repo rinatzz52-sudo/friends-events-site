@@ -1,7 +1,6 @@
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
 // ==========================================
-// ВСТАВЬТЕ СВОИ ДАННЫЕ ИЗ SUPABASE ДАШБОРДА:
 const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb';
 
@@ -23,8 +22,10 @@ try {
 let currentUser = null;
 let allEvents = [];
 let activeCategory = 'all';
+let currentChatEventId = null;
+let chatRealtimeChannel = null;
+let eventsChannel = null;
 
-// Получение элементов в строгом соответствии с index.html
 const eventsList = document.getElementById('eventsList');
 const categoryFilters = document.getElementById('categoryFilters');
 const createEventBtn = document.getElementById('createEventBtn');
@@ -55,7 +56,14 @@ const eventModal = document.getElementById('eventModal');
 const closeEventModal = document.getElementById('closeEventModal');
 const eventForm = document.getElementById('eventForm');
 
-let isSignUpMode = false; // Режим вход/регистрация
+// Модалка Чата
+const chatModal = document.getElementById('chatModal');
+const closeChatModal = document.getElementById('closeChatModal');
+const chatForm = document.getElementById('chatForm');
+const chatInput = document.getElementById('chatInput');
+const chatMessagesContainer = document.getElementById('chatMessages');
+
+let isSignUpMode = false;
 
 // ==========================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -142,7 +150,6 @@ function updateUserUI() {
   }
 }
 
-// Переключение Вход / Регистрация в модалке
 if (toggleAuthLink) {
   toggleAuthLink.addEventListener('click', (e) => {
     e.preventDefault();
@@ -164,7 +171,6 @@ if (toggleAuthLink) {
   });
 }
 
-// Форма Входа / Регистрации
 if (authForm) {
   authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -178,7 +184,6 @@ if (authForm) {
 
     try {
       if (isSignUpMode) {
-        // Регистрация
         const { error } = await supabaseClient.auth.signUp({
           email,
           password,
@@ -189,7 +194,6 @@ if (authForm) {
         if (error) throw error;
         showToast('Успешная регистрация!');
       } else {
-        // Вход
         const { error } = await supabaseClient.auth.signInWithPassword({
           email,
           password
@@ -208,7 +212,6 @@ if (authForm) {
   });
 }
 
-// Выход
 if (logoutBtn) {
   logoutBtn.addEventListener('click', async () => {
     if (supabaseClient) {
@@ -261,7 +264,6 @@ function renderEvents() {
     const participants = Array.isArray(event.participants) ? event.participants : [];
     const isAttending = currentUser && participants.includes(currentUserName);
 
-    // Список участников в столбик
     const formattedParticipantsHtml = participants.length > 0
       ? `<div style="margin-top: 0.8rem;">
            <span style="font-weight: 600;">👥 Идут (${participants.length}):</span>
@@ -291,13 +293,21 @@ function renderEvents() {
 
         ${formattedParticipantsHtml}
 
-        <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem;">
+        <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem; display: flex; gap: 0.5rem;">
           <button 
             class="btn ${isAttending ? 'btn-outline' : 'btn-primary'}" 
-            style="width: 100%;"
+            style="flex: 1;"
             onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
           >
             ${isAttending ? 'Отменить участие' : 'Пойду'}
+          </button>
+          
+          <button 
+            class="btn btn-secondary open-chat-btn" 
+            data-id="${event.id}"
+            data-title="${escapeHtml(event.title)}"
+          >
+            💬 Чат
           </button>
         </div>
       </div>
@@ -376,10 +386,189 @@ if (eventForm) {
 }
 
 // ==========================================
+// ЛОГИКА ЧАТА (EVENT MESSAGES)
+// ==========================================
+
+async function openChat(eventId, eventTitle) {
+  currentChatEventId = eventId;
+  
+  const titleEl = document.getElementById('chatEventTitle');
+  if (titleEl) titleEl.textContent = `Обсуждение: ${eventTitle}`;
+  if (chatModal) chatModal.classList.remove('hidden');
+
+  await loadChatMessages(eventId);
+  subscribeToChatMessages(eventId);
+}
+
+async function loadChatMessages(eventId) {
+  if (!chatMessagesContainer) return;
+
+  chatMessagesContainer.innerHTML = '<p style="color: #94a3b8; text-align: center; margin-top: 2rem;">Загрузка сообщений...</p>';
+
+  try {
+    const { data: messages, error } = await supabaseClient
+      .from('event_messages')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    renderMessages(messages);
+  } catch (err) {
+    console.error('Ошибка загрузки сообщений:', err.message);
+    chatMessagesContainer.innerHTML = `<p style="color: #ef4444; text-align: center;">Ошибка: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderMessages(messages) {
+  if (!chatMessagesContainer) return;
+
+  if (!messages || messages.length === 0) {
+    chatMessagesContainer.innerHTML = '<p style="color: #94a3b8; text-align: center; margin-top: 2rem;">Пока нет сообщений. Напишите первым!</p>';
+    return;
+  }
+
+  chatMessagesContainer.innerHTML = messages.map(msg => {
+    const isMine = currentUser && msg.user_id === currentUser.id;
+    
+    // Приоритет имени: user_name -> отображаемое имя текущего пользователя (если моё) -> имя из email
+    let authorName = msg.user_name;
+    if (!authorName && isMine) {
+      authorName = getUserDisplayName(currentUser);
+    }
+    if (!authorName) {
+      authorName = msg.user_email ? msg.user_email.split('@')[0] : 'Участник';
+    }
+
+    const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    return `
+      <div class="chat-message ${isMine ? 'my-message' : ''}">
+        <span class="chat-author">${escapeHtml(authorName)}</span>
+        <div class="chat-text">${escapeHtml(msg.text)}</div>
+        <span class="chat-time">${time}</span>
+      </div>
+    `;
+  }).join('');
+
+  chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+}
+
+if (chatForm) {
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!chatInput) return;
+
+    const text = chatInput.value.trim();
+    if (!text || !currentChatEventId) return;
+
+    if (!currentUser) {
+      alert('Авторизуйтесь, чтобы отправлять сообщения');
+      if (chatModal) chatModal.classList.add('hidden');
+      if (authModal) authModal.classList.remove('hidden');
+      return;
+    }
+
+    const displayName = getUserDisplayName(currentUser);
+
+    try {
+      const payload = {
+        event_id: currentChatEventId,
+        text: text,
+        user_id: currentUser.id,
+        user_email: currentUser.email,
+        user_name: displayName
+      };
+
+      const { error } = await supabaseClient
+        .from('event_messages')
+        .insert([payload]);
+
+      if (error) throw error;
+      chatInput.value = '';
+    } catch (err) {
+      alert('Ошибка отправки сообщения: ' + err.message);
+    }
+  });
+}
+
+if (closeChatModal) {
+  closeChatModal.addEventListener('click', () => {
+    if (chatModal) chatModal.classList.add('hidden');
+    currentChatEventId = null;
+
+    if (chatRealtimeChannel) {
+      supabaseClient.removeChannel(chatRealtimeChannel);
+      chatRealtimeChannel = null;
+    }
+  });
+}
+
+function subscribeToChatMessages(eventId) {
+  if (chatRealtimeChannel) {
+    supabaseClient.removeChannel(chatRealtimeChannel);
+  }
+
+  chatRealtimeChannel = supabaseClient
+    .channel(`chat-${eventId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'event_messages',
+        filter: `event_id=eq.${eventId}`
+      },
+      () => {
+        loadChatMessages(eventId);
+      }
+    )
+    .subscribe();
+}
+
+// Глобальное делегирование кликов для открытия чата
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.open-chat-btn');
+  if (btn) {
+    const id = btn.dataset.id;
+    const title = btn.dataset.title;
+    if (id) {
+      openChat(id, title);
+    }
+  }
+});
+
+// ==========================================
+// REALTIME СОБЫТИЙ
+// ==========================================
+
+function subscribeToEvents() {
+  if (!supabaseClient) return;
+
+  if (eventsChannel) {
+    supabaseClient.removeChannel(eventsChannel);
+  }
+
+  eventsChannel = supabaseClient
+    .channel('events-changes-channel')
+    .on(
+      'postgres_changes',
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: 'events' 
+      },
+      () => {
+        loadEvents();
+      }
+    )
+    .subscribe();
+}
+
+// ==========================================
 // МОДАЛЬНЫЕ ОКНА И КНОПКИ
 // ==========================================
 
-// Открытие модалки авторизации
 if (authBtn) {
   authBtn.addEventListener('click', () => {
     if (authModal) authModal.classList.remove('hidden');
@@ -392,7 +581,6 @@ if (closeAuthModal) {
   });
 }
 
-// Открытие модалки создания встречи
 if (createEventBtn) {
   createEventBtn.addEventListener('click', () => {
     if (!currentUser) {
@@ -405,11 +593,10 @@ if (createEventBtn) {
 
 if (closeEventModal) {
   closeEventModal.addEventListener('click', () => {
-    if (eventModal) eventModal.classList.add('hidden');
+    if (eventModal) eventModal.classList.remove('hidden');
   });
 }
 
-// Копирование ссылки
 if (inviteBtn) {
   inviteBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(window.location.href);
@@ -417,7 +604,6 @@ if (inviteBtn) {
   });
 }
 
-// Фильтры категорий
 if (categoryFilters) {
   const tabs = categoryFilters.querySelectorAll('.tab-btn');
   tabs.forEach(tab => {
@@ -434,48 +620,8 @@ if (categoryFilters) {
 // ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-  if (nameGroup) nameGroup.style.display = 'none'; // По умолчанию режим "Вход"
+  if (nameGroup) nameGroup.style.display = 'none';
   initAuth();
   loadEvents();
   subscribeToEvents();
 });
-
-// ==========================================
-// ОБНОВЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ (REALTIME)
-// ==========================================
-let eventsChannel = null;
-
-function subscribeToEvents() {
-  if (!supabaseClient) return;
-
-  // Отписываемся от старого канала, если он уже был создан
-  if (eventsChannel) {
-    supabaseClient.removeChannel(eventsChannel);
-  }
-
-  eventsChannel = supabaseClient
-    .channel('events-changes-channel')
-    .on(
-      'postgres_changes',
-      { 
-        event: '*', 
-        schema: 'public', 
-        table: 'events' 
-      },
-      (payload) => {
-        console.log('Realtime обновление получено:', payload);
-        loadEvents(); // Перезагружаем список
-      }
-    )
-    .subscribe((status, err) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('Успешно подключено к Realtime!');
-      }
-      if (status === 'CHANNEL_ERROR') {
-        console.error('Ошибка Realtime канала:', err);
-      }
-      if (status === 'TIMED_OUT') {
-        console.warn('Превышено время ожидания подключения к Realtime');
-      }
-    });
-}

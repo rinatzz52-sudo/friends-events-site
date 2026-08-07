@@ -5,43 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Сходки & Сборы</title>
   <link rel="stylesheet" href="style.css">
-  
-  <!-- Подключаем официальную библиотеку Supabase для работы с базой данных из браузера -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-  <!-- ВЕРХНЯЯ ПАНЕЛЬ (ШАПКА САЙТА) -->
+  <!-- Шапка -->
   <header class="header">
     <div class="logo">⚽ Сходки & Сборы</div>
     <div class="header-actions">
-      <!-- Кнопка быстрой копировки ссылки на сайт -->
-      <button id="inviteBtn" class="btn btn-secondary">🔗 Пригласить друга</button>
-
-      <!-- Блок профиля: виден только когда пользователь ВОШЕЛ в аккаунт -->
-      <div id="userProfile" class="user-profile hidden">
-        <span id="userName">Пользователь</span>
-        <button id="logoutBtn" class="btn btn-outline">Выйти</button>
+      <button id="inviteBtn" class="btn btn-outline btn-sm">🔗 Пригласить друга</button>
+      
+      <div id="userProfile" class="hidden" style="display: flex; align-items: center; gap: 0.75rem;">
+        <span id="userName" style="color: #38bdf8; font-weight: 600;"></span>
+        <button id="logoutBtn" class="btn btn-secondary btn-sm">Выйти</button>
       </div>
 
-      <!-- Кнопка входа: видна только когда пользователь НЕ авторизован -->
-      <button id="authBtn" class="btn btn-primary">Войти / Регистрация</button>
+      <button id="authBtn" class="btn btn-primary btn-sm">Войти</button>
     </div>
   </header>
 
-  <!-- ОСНОВНОЙ КОНТЕНТ СТРАНИЦЫ -->
+  <!-- Главный контент -->
   <main class="container">
-    
-    <!-- Заголовок раздела и кнопка создания ивента -->
     <div class="events-header">
       <h2>Встречи</h2>
-      <!-- Кнопка доступна только авторизованным пользователям -->
       <button id="createEventBtn" class="btn btn-primary hidden">+ Создать ивент</button>
     </div>
 
-    <!-- ПАНЕЛЬ ФИЛЬТРОВ И АРХИВА -->
+    <!-- Фильтры -->
     <div class="filters-bar">
-      <!-- Кнопки переключения категорий (data-category используется в JS для фильтрации) -->
       <div class="categories-tabs" id="categoryFilters">
         <button class="tab-btn active" data-category="all">Все</button>
         <button class="tab-btn" data-category="Спорт">⚽ Спорт</button>
@@ -49,63 +40,59 @@
         <button class="tab-btn" data-category="Поездки">🚗 Поездки</button>
         <button class="tab-btn" data-category="Встречи">🍕 Встречи</button>
       </div>
-
-      <!-- Кнопка переключения между активными ивентами и архивом прошедших -->
-      <div class="archive-toggle">
-        <button id="toggleArchiveBtn" class="btn btn-sm btn-outline">📁 Архив</button>
-      </div>
+      <button class="tab-btn" style="color: #cbd5e1;">📁 Архив</button>
     </div>
 
-    <!-- СЕТКА КАРТОЧЕК: Сюда JavaScript будет динамически вставлять карточки встреч -->
-    <div id="eventsList" class="events-grid"></div>
+    <!-- Сетка ивентов -->
+    <div id="eventsList" class="events-grid">
+      <!-- Ивенты рендерятся динамически -->
+    </div>
   </main>
 
-  <!-- МОДАЛЬНОЕ ОКНО: Авторизация и Регистрация -->
+  <!-- Модальное окно авторизации -->
   <div id="authModal" class="modal hidden">
     <div class="modal-content">
-      <span class="close-btn" id="closeAuthModal">&times;</span>
-      <h3 id="modalTitle">Вход в аккаунт</h3>
+      <span id="closeAuthModal" class="close-btn">&times;</span>
+      <h3 id="modalTitle" style="margin-bottom: 1rem;">Вход в аккаунт</h3>
       <form id="authForm">
-        <!-- Поле "Имя" показывается только при регистрации -->
         <div class="form-group" id="nameGroup">
-          <label>Ваше Имя</label>
-          <input type="text" id="authName" placeholder="Иван">
+          <label>Ваше имя</label>
+          <input type="text" id="authName" placeholder="Имя">
         </div>
         <div class="form-group">
           <label>Email</label>
-          <input type="email" id="authEmail" required placeholder="name@example.com">
+          <input type="email" id="authEmail" required placeholder="email@example.com">
         </div>
         <div class="form-group">
           <label>Пароль</label>
           <input type="password" id="authPassword" required placeholder="••••••••">
         </div>
-        <button type="submit" class="btn btn-primary btn-full" id="authSubmitBtn">Войти</button>
+        <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-full">Войти</button>
       </form>
-      <!-- Переключатель между Входом и Регистрацией -->
-      <p class="toggle-auth">
+      <div class="toggle-auth">
         <span id="toggleAuthText">Нет аккаунта?</span> 
         <a href="#" id="toggleAuthLink">Зарегистрироваться</a>
-      </p>
+      </div>
     </div>
   </div>
 
-  <!-- МОДАЛЬНОЕ ОКНО: Создание нового ивента -->
+  <!-- Модальное окно создания ивента -->
   <div id="eventModal" class="modal hidden">
     <div class="modal-content">
-      <span class="close-btn" id="closeEventModal">&times;</span>
-      <h3>Создать новую встречу</h3>
+      <span id="closeEventModal" class="close-btn">&times;</span>
+      <h3 style="margin-bottom: 1rem;">Новая встреча</h3>
       <form id="eventForm">
         <div class="form-group">
-          <label>Название встречи</label>
+          <label>Название</label>
           <input type="text" id="eventTitle" required placeholder="Например: Турнир по FIFA">
         </div>
         <div class="form-group">
           <label>Категория</label>
           <select id="eventCategory" required>
-            <option value="Спорт">⚽ Спорт</option>
-            <option value="Игры">🎮 Игры</option>
-            <option value="Поездки">🚗 Поездки</option>
-            <option value="Встречи">🍕 Встречи</option>
+            <option value="Спорт">Спорт</option>
+            <option value="Игры">Игры</option>
+            <option value="Поездки">Поездки</option>
+            <option value="Встречи">Встречи</option>
           </select>
         </div>
         <div class="form-group">
@@ -114,17 +101,35 @@
         </div>
         <div class="form-group">
           <label>Описание</label>
-          <textarea id="eventDescription" rows="3" placeholder="Детали встречи, где собираемся..."></textarea>
+          <textarea id="eventDescription" rows="3" placeholder="Подробности встречи..."></textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-full">Опубликовать</button>
+        <button type="submit" class="btn btn-primary btn-full">Создать</button>
       </form>
     </div>
   </div>
 
-  <!-- УВЕДОМЛЕНИЕ (Toast): Показывается при скопированной ссылке -->
-  <div id="toast" class="toast hidden">Ссылка скопирована в буфер обмена!</div>
+  <!-- Модальное окно ЧАТА -->
+  <div id="chatModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 500px; display: flex; flex-direction: column; max-height: 85vh;">
+      <span id="closeChatModal" class="close-btn">&times;</span>
+      <h3 id="chatEventTitle" style="margin-bottom: 1rem; font-size: 1.1rem; padding-right: 1.5rem;">Обсуждение встречи</h3>
+      
+      <!-- Список сообщений -->
+      <div id="chatMessages" class="chat-messages-container">
+        <!-- Сообщения рендерятся тут -->
+      </div>
 
-  <!-- Подключаем наш скрипт логики -->
+      <!-- Форма отправки -->
+      <form id="chatForm" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+        <input type="text" id="chatInput" placeholder="Напишите сообщение..." required style="flex: 1;">
+        <button type="submit" class="btn btn-primary">Отправить</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Уведомления -->
+  <div id="toast" class="toast hidden"></div>
+
   <script src="app.js"></script>
 </body>
 </html>
