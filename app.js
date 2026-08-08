@@ -488,6 +488,26 @@ if (eventForm) {
 // ЛОГИКА ЧАТА (EVENT MESSAGES)
 // ==========================================
 
+async function markMessagesAsRead(messages) {
+  if (!currentUser || !supabaseClient || !messages || messages.length === 0) return;
+
+  const currentUserId = currentUser.id;
+
+  for (const msg of messages) {
+    // Находим сообщения от других участников, где нет нашей отметки о прочтении
+    if (msg.user_id !== currentUserId) {
+      const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
+      if (!readList.includes(currentUserId)) {
+        const updatedReadList = [...readList, currentUserId];
+        await supabaseClient
+          .from('event_messages')
+          .update({ read_by: updatedReadList })
+          .eq('id', msg.id);
+      }
+    }
+  }
+}
+
 async function openChat(eventId, eventTitle) {
   const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
   
@@ -517,7 +537,9 @@ async function loadChatMessages(eventId) {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
+    
     renderMessages(messages);
+    await markMessagesAsRead(messages);
   } catch (err) {
     console.error('Ошибка загрузки сообщений:', err.message);
     chatMessagesContainer.innerHTML = `<p style="color: #ef4444; text-align: center;">Ошибка: ${escapeHtml(err.message)}</p>`;
@@ -545,11 +567,22 @@ function renderMessages(messages) {
 
     const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    // Формирование галочек прочтения
+    let statusHtml = '';
+    if (isMine) {
+      const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
+      const isReadByOthers = readList.some(id => id !== currentUser.id);
+
+      statusHtml = isReadByOthers
+        ? `<span style="color: #38bdf8; font-weight: bold; margin-left: 4px;" title="Прочитано">✓✓</span>`
+        : `<span style="color: #94a3b8; margin-left: 4px;" title="Отправлено">✓</span>`;
+    }
+
     return `
       <div class="chat-message ${isMine ? 'my-message' : ''}">
         <span class="chat-author">${escapeHtml(authorName)}</span>
         <div class="chat-text">${escapeHtml(msg.text)}</div>
-        <span class="chat-time">${time}</span>
+        <span class="chat-time">${time} ${statusHtml}</span>
       </div>
     `;
   }).join('');
@@ -579,7 +612,8 @@ if (chatForm) {
         text: text,
         user_id: currentUser.id,
         user_email: currentUser.email,
-        user_name: displayName
+        user_name: displayName,
+        read_by: [currentUser.id]
       };
 
       const { error } = await supabaseClient
@@ -639,7 +673,7 @@ function subscribeToEvents() {
     .subscribe();
 }
 
-// Подписка на сообщения конкретного открытого ивента с ФИЛЬТРОМ
+// Подписка на сообщения и обновления конкретного ивента
 function subscribeToChatMessages(eventId) {
   if (!supabaseClient) return;
 
@@ -652,7 +686,7 @@ function subscribeToChatMessages(eventId) {
     .on(
       'postgres_changes',
       {
-        event: 'INSERT',
+        event: '*', // Слушаем INSERT и UPDATE (для отслеживания статусов)
         schema: 'public',
         table: 'event_messages',
         filter: `event_id=eq.${eventId}`
