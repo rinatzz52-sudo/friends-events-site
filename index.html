@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Встречи друзей</title>
   
+  <!-- Иконки и PWA -->
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="icon-512.png">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <meta name="theme-color" content="#0f172a">
 
   <!-- Supabase JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -176,10 +179,12 @@
     <!-- Фильтры категорий -->
     <div id="categoryFilters" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
       <button class="btn btn-secondary tab-btn active" data-category="all">Все</button>
-      <button class="btn btn-secondary tab-btn" data-category="Спорт">Спорт</button>
-      <button class="btn btn-secondary tab-btn" data-category="Настолки">Настолки</button>
-      <button class="btn btn-secondary tab-btn" data-category="Прогулка">Прогулка</button>
-      <button class="btn btn-secondary tab-btn" data-category="Другое">Другое</button>
+      <button class="btn btn-secondary tab-btn" data-category="Покер">♠️ Покер</button>
+      <button class="btn btn-secondary tab-btn" data-category="PlayStation">🎮 PlayStation</button>
+      <button class="btn btn-secondary tab-btn" data-category="Тренажерный зал">🏋️‍♂️ Тренажерный зал</button>
+      <button class="btn btn-secondary tab-btn" data-category="Картинг">🏎️ Картинг</button>
+      <button class="btn btn-secondary tab-btn" data-category="Кальян">🌬️ Кальян</button>
+      <button class="btn btn-secondary tab-btn" data-category="Другое">📍 Другое</button>
     </div>
 
     <!-- Список событий -->
@@ -222,15 +227,17 @@
       <form id="eventForm">
         <div class="form-group">
           <label for="eventTitle">Название</label>
-          <input type="text" id="eventTitle" required placeholder="Играем в настолки">
+          <input type="text" id="eventTitle" required placeholder="Например Турнир по Fifa">
         </div>
         <div class="form-group">
           <label for="eventCategory">Категория</label>
-          <select id="eventCategory">
-            <option value="Спорт">Спорт</option>
-            <option value="Настолки">Настолки</option>
-            <option value="Прогулка">Прогулка</option>
-            <option value="Другое">Другое</option>
+          <select id="eventCategory" required>
+            <option value="Покер">♠️ Покер</option>
+            <option value="PlayStation">🎮 PlayStation</option>
+            <option value="Тренажерный зал">🏋️‍♂️ Тренажерный зал</option>
+            <option value="Картинг">🏎️ Картинг</option>
+            <option value="Кальян">🌬️ Кальян</option>
+            <option value="Другое" selected>📍 Другое</option>
           </select>
         </div>
         <div class="form-group">
