@@ -24,7 +24,7 @@ let allEvents = [];
 let activeCategory = 'all';
 let currentChatEventId = null;
 let eventsChannel = null;
-let globalChatChannel = null;
+let chatRealtimeChannel = null;
 
 const eventsList = document.getElementById('eventsList');
 const categoryFilters = document.getElementById('categoryFilters');
@@ -114,6 +114,18 @@ function showToast(text) {
   setTimeout(() => {
     toast.classList.add('hidden');
   }, 3000);
+}
+
+// Проверка доступа к чату (участник ли или создатель)
+function canUserAccessChat(event) {
+  if (!currentUser || !event) return false;
+  const currentUserName = getUserDisplayName(currentUser);
+  const participants = Array.isArray(event.participants) ? event.participants : [];
+  
+  const isAttending = participants.includes(currentUserName);
+  const isCreator = event.creator_id === currentUser.id;
+  
+  return isAttending || isCreator;
 }
 
 // ==========================================
@@ -268,6 +280,7 @@ function renderEvents() {
     const participants = Array.isArray(event.participants) ? event.participants : [];
     const isAttending = currentUser && participants.includes(currentUserName);
     const isCreator = currentUser && event.creator_id === currentUser.id;
+    const canAccessChat = isAttending || isCreator;
 
     const formattedParticipantsHtml = participants.length > 0
       ? `<div style="margin-top: 0.8rem;">
@@ -310,13 +323,15 @@ function renderEvents() {
             ${isAttending ? 'Отменить участие' : 'Пойду'}
           </button>
           
-          <button 
-            class="btn btn-secondary open-chat-btn" 
-            data-id="${event.id}"
-            data-title="${escapeHtml(event.title)}"
-          >
-            💬 Чат
-          </button>
+          ${canAccessChat ? `
+            <button 
+              class="btn btn-secondary open-chat-btn" 
+              data-id="${event.id}"
+              data-title="${escapeHtml(event.title)}"
+            >
+              💬 Чат
+            </button>
+          ` : ''}
         </div>
       </div>
     `;
@@ -364,6 +379,12 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
       .eq('id', eventId);
 
     if (error) throw error;
+    
+    // Если пользователь отменил участие и открыт чат этого события — закрываем чат
+    if (currentChatEventId === eventId && !updatedParticipants.includes(participantName)) {
+      closeChatModalWindow();
+    }
+
     await loadEvents();
   } catch (err) {
     alert('Не удалось обновить запись: ' + err.message);
@@ -414,6 +435,13 @@ if (eventForm) {
 // ==========================================
 
 async function openChat(eventId, eventTitle) {
+  const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
+  
+  if (!canUserAccessChat(targetEvent)) {
+    alert('Чат доступен только участникам события!');
+    return;
+  }
+
   currentChatEventId = eventId;
   
   const titleEl = document.getElementById('chatEventTitle');
@@ -421,6 +449,7 @@ async function openChat(eventId, eventTitle) {
   if (chatModal) chatModal.classList.remove('hidden');
 
   await loadChatMessages(eventId);
+  subscribeToChatMessages(eventId);
 }
 
 async function loadChatMessages(eventId) {
@@ -482,10 +511,9 @@ if (chatForm) {
     const text = chatInput.value.trim();
     if (!text || !currentChatEventId) return;
 
-    if (!currentUser) {
-      alert('Авторизуйтесь, чтобы отправлять сообщения');
-      if (chatModal) chatModal.classList.add('hidden');
-      if (authModal) authModal.classList.remove('hidden');
+    const targetEvent = allEvents.find(e => String(e.id) === String(currentChatEventId));
+    if (!canUserAccessChat(targetEvent)) {
+      alert('Вы не являетесь участником этого события.');
       return;
     }
 
@@ -512,11 +540,17 @@ if (chatForm) {
   });
 }
 
+function closeChatModalWindow() {
+  if (chatModal) chatModal.classList.add('hidden');
+  currentChatEventId = null;
+  if (chatRealtimeChannel) {
+    supabaseClient.removeChannel(chatRealtimeChannel);
+    chatRealtimeChannel = null;
+  }
+}
+
 if (closeChatModal) {
-  closeChatModal.addEventListener('click', () => {
-    if (chatModal) chatModal.classList.add('hidden');
-    currentChatEventId = null;
-  });
+  closeChatModal.addEventListener('click', closeChatModalWindow);
 }
 
 document.addEventListener('click', (e) => {
@@ -531,7 +565,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// ЕДИНЫЙ REALTIME СЛУШАТЕЛЬ (ЧАТ + УВЕДОМЛЕНИЯ)
+// REALTIME СЛУШАТЕЛИ
 // ==========================================
 
 function subscribeToEvents() {
@@ -551,62 +585,37 @@ function subscribeToEvents() {
     .subscribe();
 }
 
-// Один глобальный канал на ВСЕ сообщения для чата и Push
-async function initGlobalChatSubscription() {
+// Подписка на сообщения конкретного открытого ивента с ФИЛЬТРОМ
+function subscribeToChatMessages(eventId) {
   if (!supabaseClient) return;
 
-  if (globalChatChannel) {
-    await supabaseClient.removeChannel(globalChatChannel);
+  if (chatRealtimeChannel) {
+    supabaseClient.removeChannel(chatRealtimeChannel);
   }
 
-  globalChatChannel = supabaseClient
-    .channel('global-chat-channel')
+  chatRealtimeChannel = supabaseClient
+    .channel(`chat-${eventId}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'event_messages' },
-      async (payload) => {
-        const msg = payload.new;
-
-        // 1. Если чат с этим event_id сейчас открыт — обновляем его экран
-        if (currentChatEventId && String(msg.event_id) === String(currentChatEventId)) {
-          loadChatMessages(currentChatEventId);
-        }
-
-        // 2. Если сообщение не от нас — слать Push
-        if (currentUser && msg.user_id === currentUser.id) return;
-
-        if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-          try {
-            const reg = await navigator.serviceWorker.ready;
-            const author = msg.user_name || (msg.user_email ? msg.user_email.split('@')[0] : 'Участник');
-
-            reg.showNotification(`💬 Новое сообщение от ${author}`, {
-              body: msg.text || 'Новое сообщение в чате',
-              icon: '/icon-512.png',
-              badge: '/icon-512.png',
-              tag: `chat-${msg.event_id}`,
-              data: { url: window.location.href }
-            });
-          } catch (e) {
-            console.error('Ошибка показа Push:', e);
-          }
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'event_messages',
+        filter: `event_id=eq.${eventId}` // Подписка ТОЛЬКО на данный ивент
+      },
+      () => {
+        if (currentChatEventId === eventId) {
+          loadChatMessages(eventId);
         }
       }
     )
-    .subscribe((status) => {
-      console.log('Статус подключения Realtime чата:', status);
-    });
+    .subscribe();
 }
 
 // Восстановление соединения при возврате во вкладку браузера
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    if (globalChatChannel && globalChatChannel.state !== 'joined') {
-      initGlobalChatSubscription();
-    }
-    if (currentChatEventId) {
-      loadChatMessages(currentChatEventId);
-    }
+  if (document.visibilityState === 'visible' && currentChatEventId) {
+    loadChatMessages(currentChatEventId);
   }
 });
 
@@ -753,5 +762,4 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   loadEvents();
   subscribeToEvents();
-  initGlobalChatSubscription();
 });
