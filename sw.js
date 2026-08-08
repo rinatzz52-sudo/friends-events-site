@@ -1,34 +1,43 @@
-// sw.js
-self.addEventListener('push', (event) => {
-  let data = { title: 'Новое событие!', body: 'У вас новое уведомление.' };
-
+self.addEventListener('push', function(event) {
+  let data = {};
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
-      data.body = event.data.text();
+      data = { title: 'Новое сообщение', body: event.data.text() };
     }
   }
 
+  const title = data.title || '💬 Новое сообщение';
   const options = {
-    body: data.body,
+    body: data.body || 'У вас новое сообщение в чате',
     icon: '/icon-512.png',
     badge: '/icon-512.png',
-    vibrate: [100, 50, 100],
+    tag: data.tag || 'general-chat-notification',
     data: {
       url: data.url || '/'
     }
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(title, options)
   );
 });
 
-// Клик по уведомлению открывает сайт
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
   event.waitUntil(
-    clients.openWindow(event.notification.data.url)
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
   );
 });
