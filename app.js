@@ -493,18 +493,24 @@ async function markMessagesAsRead(messages) {
 
   const currentUserId = currentUser.id;
 
-  for (const msg of messages) {
-    // Находим сообщения от других участников, где нет нашей отметки о прочтении
-    if (msg.user_id !== currentUserId) {
-      const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
-      if (!readList.includes(currentUserId)) {
-        const updatedReadList = [...readList, currentUserId];
-        await supabaseClient
-          .from('event_messages')
-          .update({ read_by: updatedReadList })
-          .eq('id', msg.id);
-      }
-    }
+  // Отбираем чужие сообщения, где мы еще не отмечены в read_by
+  const unreadMessages = messages.filter(msg => {
+    if (msg.user_id === currentUserId) return false;
+    const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
+    return !readList.includes(currentUserId);
+  });
+
+  if (unreadMessages.length === 0) return;
+
+  // Обновляем каждое сообщение отдельно аккуратным запросом
+  for (const msg of unreadMessages) {
+    const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
+    const updatedReadList = [...readList, currentUserId];
+
+    await supabaseClient
+      .from('event_messages')
+      .update({ read_by: updatedReadList })
+      .eq('id', msg.id);
   }
 }
 
