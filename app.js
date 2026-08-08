@@ -23,7 +23,6 @@ let currentUser = null;
 let allEvents = [];
 let activeCategory = 'all';
 let currentChatEventId = null;
-let chatRealtimeChannel = null;
 let eventsChannel = null;
 let globalChatChannel = null;
 
@@ -332,10 +331,7 @@ window.deleteEvent = async function(eventId) {
   if (!confirm('Вы уверены, что хотите удалить эту встречу?')) return;
 
   try {
-    // 1. Удаляем связанные сообщения в чате
     await supabaseClient.from('event_messages').delete().eq('event_id', eventId);
-
-    // 2. Удаляем сам ивент
     const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
     if (error) throw error;
 
@@ -425,13 +421,10 @@ async function openChat(eventId, eventTitle) {
   if (chatModal) chatModal.classList.remove('hidden');
 
   await loadChatMessages(eventId);
-  subscribeToChatMessages(eventId);
 }
 
 async function loadChatMessages(eventId) {
   if (!chatMessagesContainer) return;
-
-  chatMessagesContainer.innerHTML = '<p style="color: #94a3b8; text-align: center; margin-top: 2rem;">Загрузка сообщений...</p>';
 
   try {
     const { data: messages, error } = await supabaseClient
@@ -523,34 +516,7 @@ if (closeChatModal) {
   closeChatModal.addEventListener('click', () => {
     if (chatModal) chatModal.classList.add('hidden');
     currentChatEventId = null;
-
-    if (chatRealtimeChannel) {
-      supabaseClient.removeChannel(chatRealtimeChannel);
-      chatRealtimeChannel = null;
-    }
   });
-}
-
-function subscribeToChatMessages(eventId) {
-  if (chatRealtimeChannel) {
-    supabaseClient.removeChannel(chatRealtimeChannel);
-  }
-
-  chatRealtimeChannel = supabaseClient
-    .channel(`chat-${eventId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'event_messages',
-        filter: `event_id=eq.${eventId}`
-      },
-      () => {
-        loadChatMessages(eventId);
-      }
-    )
-    .subscribe();
 }
 
 document.addEventListener('click', (e) => {
@@ -565,7 +531,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// REALTIME ПОДПИСКИ (СОБЫТИЯ И ГЛОБАЛЬНЫЕ УВЕДОМЛЕНИЯ)
+// ЕДИНЫЙ REALTIME СЛУШАТЕЛЬ (ЧАТ + УВЕДОМЛЕНИЯ)
 // ==========================================
 
 function subscribeToEvents() {
@@ -579,42 +545,36 @@ function subscribeToEvents() {
     .channel('events-changes-channel')
     .on(
       'postgres_changes',
-      { 
-        event: '*', 
-        schema: 'public', 
-        table: 'events' 
-      },
-      () => {
-        loadEvents();
-      }
+      { event: '*', schema: 'public', table: 'events' },
+      () => loadEvents()
     )
     .subscribe();
 }
 
-// Глобальное прослушивание сообщений для отправки Push
-function subscribeToGlobalChatNotifications() {
+// Один глобальный канал на ВСЕ сообщения для чата и Push
+async function initGlobalChatSubscription() {
   if (!supabaseClient) return;
 
   if (globalChatChannel) {
-    supabaseClient.removeChannel(globalChatChannel);
+    await supabaseClient.removeChannel(globalChatChannel);
   }
 
   globalChatChannel = supabaseClient
-    .channel('global-chat-notifications')
+    .channel('global-chat-channel')
     .on(
       'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'event_messages'
-      },
+      { event: 'INSERT', schema: 'public', table: 'event_messages' },
       async (payload) => {
         const msg = payload.new;
 
-        // Не слать уведомление самому себе
+        // 1. Если чат с этим event_id сейчас открыт — обновляем его экран
+        if (currentChatEventId && String(msg.event_id) === String(currentChatEventId)) {
+          loadChatMessages(currentChatEventId);
+        }
+
+        // 2. Если сообщение не от нас — слать Push
         if (currentUser && msg.user_id === currentUser.id) return;
 
-        // Отправка Push через Service Worker
         if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
           try {
             const reg = await navigator.serviceWorker.ready;
@@ -633,8 +593,22 @@ function subscribeToGlobalChatNotifications() {
         }
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log('Статус подключения Realtime чата:', status);
+    });
 }
+
+// Восстановление соединения при возврате во вкладку браузера
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (globalChatChannel && globalChatChannel.state !== 'joined') {
+      initGlobalChatSubscription();
+    }
+    if (currentChatEventId) {
+      loadChatMessages(currentChatEventId);
+    }
+  }
+});
 
 // ==========================================
 // МОДАЛЬНЫЕ ОКНА И КНОПКИ
@@ -779,5 +753,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   loadEvents();
   subscribeToEvents();
-  subscribeToGlobalChatNotifications();
+  initGlobalChatSubscription();
 });
