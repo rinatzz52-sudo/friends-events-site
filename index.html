@@ -2,13 +2,13 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Встречи друзей</title>
   
   <!-- Иконки и PWA -->
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="/icon-512.png">
-  <link rel="apple-touch-icon" href="/icon-512.png">
+  <link rel="icon" type="image/png" href="icon-512.png">
+  <link rel="apple-touch-icon" href="icon-512.png">
   <meta name="theme-color" content="#0f172a">
 
   <!-- Supabase JS CDN -->
@@ -25,38 +25,63 @@
       --primary-hover: #2563eb;
     }
 
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-main);
       color: var(--text-main);
+      overflow-x: hidden; /* Предотвращает горизонтальную прокрутку */
     }
 
     .container {
       max-width: 1000px;
       margin: 0 auto;
-      padding: 1.5rem;
+      padding: 1rem;
     }
 
     header {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid var(--border-color);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
       flex-wrap: wrap;
-      gap: 1rem;
+      width: 100%;
     }
 
     .btn {
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 0.8rem;
       border-radius: 0.5rem;
       border: none;
       font-weight: 500;
+      font-size: 0.9rem;
       cursor: pointer;
       transition: background 0.2s;
+      white-space: nowrap;
     }
 
     .btn-primary { background: var(--primary); color: white; }
@@ -70,6 +95,31 @@
       display: flex;
       gap: 0.5rem;
       align-items: center;
+      margin-left: auto; /* Помещает профиль в правую часть */
+    }
+
+    /* Адаптивные табы категорий */
+    .category-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .category-tabs::-webkit-scrollbar {
+      display: none; /* Скрываем скроллбар для эстетики */
+    }
+
+    .tab-btn {
+      flex-shrink: 0;
+    }
+
+    .grid-events {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
     }
 
     .modal {
@@ -80,15 +130,18 @@
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      padding: 1rem;
     }
 
     .modal-content {
       background: var(--card-bg);
-      padding: 2rem;
+      padding: 1.5rem;
       border-radius: 0.75rem;
       width: 100%;
       max-width: 450px;
       border: 1px solid var(--border-color);
+      max-height: 90vh;
+      overflow-y: auto;
     }
 
     .form-group {
@@ -108,13 +161,6 @@
       border: 1px solid var(--border-color);
       background: var(--bg-main);
       color: var(--text-main);
-      box-sizing: border-box;
-    }
-
-    .grid-events {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.5rem;
     }
 
     .chat-container {
@@ -135,6 +181,7 @@
       border-radius: 0.5rem;
       max-width: 80%;
       align-self: flex-start;
+      word-break: break-word;
     }
 
     .chat-message.my-message {
@@ -162,8 +209,10 @@
 
   <div class="container">
     <header>
-      <h1>📅 Встречи и События</h1>
-      <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="header-top">
+        <h1>📅 Встречи и События</h1>
+      </div>
+      <div class="header-actions">
         <button id="enablePushBtn" class="btn btn-secondary">🔔 Уведомления</button>
         <button id="inviteBtn" class="btn btn-outline">🔗 Поделиться</button>
         <button id="createEventBtn" class="btn btn-primary hidden">+ Создать</button>
@@ -176,15 +225,15 @@
       </div>
     </header>
 
-    <!-- Фильтры категорий -->
-    <div id="categoryFilters" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+    <!-- Фильтры категорий (с горизонтальной прокруткой) -->
+    <div id="categoryFilters" class="category-tabs">
       <button class="btn btn-secondary tab-btn active" data-category="all">Все</button>
       <button class="btn btn-secondary tab-btn" data-category="Покер">♠️ Покер</button>
       <button class="btn btn-secondary tab-btn" data-category="PlayStation">🎮 PlayStation</button>
       <button class="btn btn-secondary tab-btn" data-category="Тренажерный зал">🏋️‍♂️ Тренажерный зал</button>
       <button class="btn btn-secondary tab-btn" data-category="Картинг">🏎️ Картинг</button>
-      <button class="btn btn-secondary tab-btn" data-category="Кальян">🌬️ Кальян</button>
-      <button class="btn btn-secondary tab-btn" data-category="Другое">📍 Другое</button>
+      <button class="btn btn-secondary tab-btn" data-category="Кальян">💨 Кальян</button>
+      <button class="btn btn-secondary tab-btn" data-category="Другое">🎈 Другое</button>
     </div>
 
     <!-- Список событий -->
@@ -227,7 +276,7 @@
       <form id="eventForm">
         <div class="form-group">
           <label for="eventTitle">Название</label>
-          <input type="text" id="eventTitle" required placeholder="Например Турнир по Fifa">
+          <input type="text" id="eventTitle" required placeholder="Собираемся вместе">
         </div>
         <div class="form-group">
           <label for="eventCategory">Категория</label>
@@ -236,8 +285,8 @@
             <option value="PlayStation">🎮 PlayStation</option>
             <option value="Тренажерный зал">🏋️‍♂️ Тренажерный зал</option>
             <option value="Картинг">🏎️ Картинг</option>
-            <option value="Кальян">🌬️ Кальян</option>
-            <option value="Другое" selected>📍 Другое</option>
+            <option value="Кальян">💨 Кальян</option>
+            <option value="Другое" selected>🎈 Другое</option>
           </select>
         </div>
         <div class="form-group">
