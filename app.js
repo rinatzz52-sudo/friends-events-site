@@ -25,6 +25,7 @@ let activeCategory = 'all';
 let currentChatEventId = null;
 let chatRealtimeChannel = null;
 let eventsChannel = null;
+let globalChatChannel = null;
 
 const eventsList = document.getElementById('eventsList');
 const categoryFilters = document.getElementById('categoryFilters');
@@ -564,7 +565,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// REALTIME СОБЫТИЙ
+// REALTIME ПОДПИСКИ (СОБЫТИЯ И ГЛОБАЛЬНЫЕ УВЕДОМЛЕНИЯ)
 // ==========================================
 
 function subscribeToEvents() {
@@ -585,6 +586,51 @@ function subscribeToEvents() {
       },
       () => {
         loadEvents();
+      }
+    )
+    .subscribe();
+}
+
+// Глобальное прослушивание сообщений для отправки Push
+function subscribeToGlobalChatNotifications() {
+  if (!supabaseClient) return;
+
+  if (globalChatChannel) {
+    supabaseClient.removeChannel(globalChatChannel);
+  }
+
+  globalChatChannel = supabaseClient
+    .channel('global-chat-notifications')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'event_messages'
+      },
+      async (payload) => {
+        const msg = payload.new;
+
+        // Не слать уведомление самому себе
+        if (currentUser && msg.user_id === currentUser.id) return;
+
+        // Отправка Push через Service Worker
+        if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const author = msg.user_name || (msg.user_email ? msg.user_email.split('@')[0] : 'Участник');
+
+            reg.showNotification(`💬 Новое сообщение от ${author}`, {
+              body: msg.text || 'Новое сообщение в чате',
+              icon: '/icon-512.png',
+              badge: '/icon-512.png',
+              tag: `chat-${msg.event_id}`,
+              data: { url: window.location.href }
+            });
+          } catch (e) {
+            console.error('Ошибка показа Push:', e);
+          }
+        }
       }
     )
     .subscribe();
@@ -733,4 +779,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   loadEvents();
   subscribeToEvents();
+  subscribeToGlobalChatNotifications();
 });
