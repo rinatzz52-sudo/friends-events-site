@@ -282,9 +282,14 @@ function renderEvents() {
     const isCreator = currentUser && event.creator_id === currentUser.id;
     const canAccessChat = isAttending || isCreator;
 
+    // Учёт лимита участников
+    const maxParticipants = event.max_participants ? parseInt(event.max_participants, 10) : null;
+    const isFull = maxParticipants ? participants.length >= maxParticipants : false;
+    const countText = maxParticipants ? `${participants.length} / ${maxParticipants}` : `${participants.length}`;
+
     const formattedParticipantsHtml = participants.length > 0
       ? `<div style="margin-top: 0.8rem;">
-           <span style="font-weight: 600;">👥 Идут (${participants.length}):</span>
+           <span style="font-weight: 600;">👥 Идут (${countText}):</span>
            <ul style="margin: 0.4rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #e2e8f0;">
              ${participants.map(p => {
                const displayName = (p && p.length === 36 && p.includes('-')) ? 'Участник' : escapeHtml(p);
@@ -292,7 +297,38 @@ function renderEvents() {
              }).join('')}
            </ul>
          </div>`
-      : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался</div>`;
+      : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался${maxParticipants ? ` (макс. ${maxParticipants})` : ''}</div>`;
+
+    // Формирование кнопки записи
+    let attendanceBtnHtml = '';
+    if (isAttending) {
+      attendanceBtnHtml = `
+        <button 
+          class="btn btn-outline" 
+          style="flex: 1;"
+          onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
+        >
+          Отменить участие
+        </button>`;
+    } else if (isFull) {
+      attendanceBtnHtml = `
+        <button 
+          class="btn btn-secondary" 
+          style="flex: 1; opacity: 0.7; cursor: not-allowed;" 
+          disabled
+        >
+          Мест нет 🔒
+        </button>`;
+    } else {
+      attendanceBtnHtml = `
+        <button 
+          class="btn btn-primary" 
+          style="flex: 1;"
+          onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
+        >
+          Пойду
+        </button>`;
+    }
 
     return `
       <div class="event-card" style="background: #1e293b; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #334155; position: relative;">
@@ -315,13 +351,7 @@ function renderEvents() {
         ${formattedParticipantsHtml}
 
         <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem; display: flex; gap: 0.5rem;">
-          <button 
-            class="btn ${isAttending ? 'btn-outline' : 'btn-primary'}" 
-            style="flex: 1;"
-            onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
-          >
-            ${isAttending ? 'Отменить участие' : 'Пойду'}
-          </button>
+          ${attendanceBtnHtml}
           
           ${canAccessChat ? `
             <button 
@@ -366,9 +396,22 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
   const participantName = getUserDisplayName(currentUser);
   let updatedParticipants = [...currentParticipants];
 
-  if (updatedParticipants.includes(participantName)) {
+  // Ищем событие и считываем лимит
+  const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
+  const maxParticipants = (targetEvent && targetEvent.max_participants !== null && targetEvent.max_participants !== undefined)
+    ? Number(targetEvent.max_participants)
+    : null;
+
+  const isAlreadyAttending = updatedParticipants.includes(participantName);
+
+  if (isAlreadyAttending) {
     updatedParticipants = updatedParticipants.filter(p => p !== participantName);
   } else {
+    // Проверка на клиенте перед отправкой
+    if (maxParticipants !== null && !isNaN(maxParticipants) && updatedParticipants.length >= maxParticipants) {
+      showToast('🔒 К сожалению, все места уже заняты!');
+      return;
+    }
     updatedParticipants.push(participantName);
   }
 
@@ -378,9 +421,17 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
       .update({ participants: updatedParticipants })
       .eq('id', eventId);
 
-    if (error) throw error;
+    if (error) {
+      // Если база данных вернула ошибку ограничения лимита
+      if (error.message && error.message.includes('check_max_participants')) {
+        showToast('🔒 Все места уже заняты!');
+        await loadEvents(); // Обновляем список, чтобы кнопка стала "Мест нет"
+        return;
+      }
+      throw error;
+    }
     
-    // Если пользователь отменил участие и открыт чат этого события — закрываем чат
+    // Если пользователь отменил участие и открыт чат — закрываем чат
     if (currentChatEventId === eventId && !updatedParticipants.includes(participantName)) {
       closeChatModalWindow();
     }
@@ -403,12 +454,15 @@ if (eventForm) {
     if (submitBtn) submitBtn.disabled = true;
 
     const creatorName = getUserDisplayName(currentUser);
+    const maxParticipantsInput = document.getElementById('eventMaxParticipants');
+    const maxParticipantsVal = maxParticipantsInput ? maxParticipantsInput.value.trim() : '';
 
     const newEvent = {
       title: document.getElementById('eventTitle').value,
       category: document.getElementById('eventCategory').value,
       event_date: document.getElementById('eventDate').value,
       description: document.getElementById('eventDescription').value,
+      max_participants: maxParticipantsVal ? parseInt(maxParticipantsVal, 10) : null,
       creator_id: currentUser.id,
       creator_name: creatorName,
       participants: [creatorName]
@@ -601,7 +655,7 @@ function subscribeToChatMessages(eventId) {
         event: 'INSERT',
         schema: 'public',
         table: 'event_messages',
-        filter: `event_id=eq.${eventId}` // Подписка ТОЛЬКО на данный ивент
+        filter: `event_id=eq.${eventId}`
       },
       () => {
         if (currentChatEventId === eventId) {

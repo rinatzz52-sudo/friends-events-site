@@ -297,6 +297,11 @@
           <label for="eventDescription">Описание</label>
           <textarea id="eventDescription" rows="3" placeholder="Где собираемся, что брать с собой..."></textarea>
         </div>
+        <!-- Поле лимита участников -->
+          <div class="form-group">
+            <label for="eventMaxParticipants">Макс. участников (оставьте пустым, если без лимита)</label>
+            <input type="number" id="eventMaxParticipants" min="1" placeholder="Например: 4">
+          </div>
         <button type="submit" class="btn btn-primary" style="width: 100%;">Опубликовать</button>
       </form>
       <button id="closeEventModal" class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;">Отмена</button>
