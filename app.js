@@ -1,5 +1,5 @@
 // ==========================================
-// ИНИЦИАЛИЗАЦИЯ SUPABASE (ТОЛЬКО ТЕСТОВАЯ БАЗА)
+// ИНИЦИАЛИЗАЦИЯ SUPABASE (БОЕВАЯ БАЗА)
 // ==========================================
 
 const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
@@ -10,7 +10,7 @@ let supabaseClient = null;
 try {
   if (typeof supabase !== 'undefined' && supabase.createClient) {
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('[Supabase] Подключено к ТЕСТОВОЙ базе данных');
+    console.log('[Supabase] Подключено к базе данных');
   } else {
     console.error('Библиотека Supabase не загрузилась из CDN!');
   }
