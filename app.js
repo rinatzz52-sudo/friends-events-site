@@ -2,8 +2,8 @@
 // ИНИЦИАЛИЗАЦИЯ SUPABASE (ТОЛЬКО ТЕСТОВАЯ БАЗА)
 // ==========================================
 
-const SUPABASE_URL = 'https://rspfqfqqazkqpnghquqz.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_63PGS9mbieONYw0OZmCrrw_11QEm9fT';
+const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb';
 
 let supabaseClient = null;
 
