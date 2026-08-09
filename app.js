@@ -93,15 +93,32 @@ function getUserDisplayName(user) {
   );
 }
 
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ ФОРМАТИРОВАНИЯ ДАТЫ И ВРЕМЕНИ
 function formatDate(dateString) {
   if (!dateString) return 'Дата не указана';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return dateString;
 
   const months = [
     'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
   ];
+
+  // 1. Если передана только дата формата YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return `${day} ${months[month - 1]}`;
+  }
+
+  // 2. Если дата пришла в формате datetime-local (YYYY-MM-DDTHH:mm)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateString)) {
+    const [datePart, timePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':');
+    return `${day} ${months[month - 1]} в ${hours}:${minutes}`;
+  }
+
+  // 3. Резервный парсинг для стандартного ISO/Date объекта
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
 
   const day = date.getDate();
   const month = months[date.getMonth()];
@@ -135,7 +152,6 @@ function canUserAccessChat(event) {
 // PWA УСТАНОВКА И УПРАВЛЕНИЕ КНОПКОЙ
 // ==========================================
 
-// Ловим стандартный запрос на установку (Android / Chrome)
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
@@ -144,24 +160,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
   }
 });
 
-// Проверка устройства на iOS
 const isIos = () => {
   const userAgent = window.navigator.userAgent.toLowerCase();
   return /iphone|ipad|ipod/.test(userAgent);
 };
 
-// Проверка, запущено ли приложение уже как PWA
 const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
 
 if (installAppBtn) {
-  // На iOS сразу показываем кнопку (если приложение открыто в браузерной вкладке Safari)
   if (isIos() && !isInStandaloneMode()) {
     installAppBtn.classList.remove('hidden');
   }
 
   installAppBtn.addEventListener('click', async () => {
     if (deferredPrompt) {
-      // Стандартная установка для Android
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
@@ -170,7 +182,6 @@ if (installAppBtn) {
       deferredPrompt = null;
       installAppBtn.classList.add('hidden');
     } else if (isIos()) {
-      // Подсказка для пользователей iPhone / iPad
       alert('Чтобы установить приложение на iPhone:\n\n' +
         '1. Если откроете в Telegram/In-App браузере: нажмите «···» вверху справа ➔ «Открыть в Safari».\n' +
         '2. В Safari нажмите кнопку «Поделиться» (квадрат со стрелкой внизу).\n' +
@@ -179,7 +190,6 @@ if (installAppBtn) {
   });
 }
 
-// Если приложение уже успешно установлено — скрываем кнопку
 window.addEventListener('appinstalled', () => {
   if (installAppBtn) installAppBtn.classList.add('hidden');
   deferredPrompt = null;
