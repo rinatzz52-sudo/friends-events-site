@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Встречи друзей</title>
+  <title>События</title>
   
   <!-- Иконки и PWA -->
   <link rel="manifest" href="manifest.json">
@@ -35,7 +35,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-main);
       color: var(--text-main);
-      overflow-x: hidden; /* Предотвращает горизонтальную прокрутку */
+      overflow-x: hidden;
     }
 
     .container {
@@ -95,10 +95,9 @@
       display: flex;
       gap: 0.5rem;
       align-items: center;
-      margin-left: auto; /* Помещает профиль в правую часть */
+      margin-left: auto;
     }
 
-    /* Адаптивные табы категорий */
     .category-tabs {
       display: flex;
       gap: 0.5rem;
@@ -109,7 +108,7 @@
     }
 
     .category-tabs::-webkit-scrollbar {
-      display: none; /* Скрываем скроллбар для эстетики */
+      display: none;
     }
 
     .tab-btn {
@@ -213,6 +212,8 @@
         <h1>📅 Встречи и События</h1>
       </div>
       <div class="header-actions">
+        <!-- Кнопка установки приложения (PWA) -->
+        <button id="installAppBtn" class="btn btn-primary hidden">📲 Скачать приложение</button>
         <button id="enablePushBtn" class="btn btn-secondary">🔔 Уведомления</button>
         <button id="inviteBtn" class="btn btn-outline">🔗 Поделиться</button>
         <button id="createEventBtn" class="btn btn-primary hidden">+ Создать</button>
@@ -225,7 +226,7 @@
       </div>
     </header>
 
-    <!-- Фильтры категорий (с горизонтальной прокруткой) -->
+    <!-- Фильтры категорий -->
     <div id="categoryFilters" class="category-tabs">
       <button class="btn btn-secondary tab-btn active" data-category="all">Все</button>
       <button class="btn btn-secondary tab-btn" data-category="Покер">♠️ Покер</button>
@@ -297,11 +298,10 @@
           <label for="eventDescription">Описание</label>
           <textarea id="eventDescription" rows="3" placeholder="Где собираемся, что брать с собой..."></textarea>
         </div>
-        <!-- Поле лимита участников -->
-          <div class="form-group">
-            <label for="eventMaxParticipants">Макс. участников (оставьте пустым, если без лимита)</label>
-            <input type="number" id="eventMaxParticipants" min="1" placeholder="Например: 4">
-          </div>
+        <div class="form-group">
+          <label for="eventMaxParticipants">Макс. участников (оставьте пустым, если без лимита)</label>
+          <input type="number" id="eventMaxParticipants" min="1" placeholder="Например: 4">
+        </div>
         <button type="submit" class="btn btn-primary" style="width: 100%;">Опубликовать</button>
       </form>
       <button id="closeEventModal" class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;">Отмена</button>

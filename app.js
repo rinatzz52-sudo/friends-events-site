@@ -1,14 +1,16 @@
 // ==========================================
-// ИНИЦИАЛИЗАЦИЯ SUPABASE
+// ИНИЦИАЛИЗАЦИЯ SUPABASE (ТОЛЬКО ТЕСТОВАЯ БАЗА)
 // ==========================================
-const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb';
+
+const SUPABASE_URL = 'https://rspfqfqqazkqpnghquqz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_63PGS9mbieONYw0OZmCrrw_11QEm9fT';
 
 let supabaseClient = null;
 
 try {
   if (typeof supabase !== 'undefined' && supabase.createClient) {
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('[Supabase] Подключено к ТЕСТОВОЙ базе данных');
   } else {
     console.error('Библиотека Supabase не загрузилась из CDN!');
   }
@@ -25,12 +27,14 @@ let activeCategory = 'all';
 let currentChatEventId = null;
 let eventsChannel = null;
 let chatRealtimeChannel = null;
+let deferredPrompt = null; // Для установки PWA
 
 const eventsList = document.getElementById('eventsList');
 const categoryFilters = document.getElementById('categoryFilters');
 const createEventBtn = document.getElementById('createEventBtn');
 const inviteBtn = document.getElementById('inviteBtn');
 const enablePushBtn = document.getElementById('enablePushBtn');
+const installAppBtn = document.getElementById('installAppBtn');
 const toast = document.getElementById('toast');
 
 // Профиль и Авторизация
@@ -116,7 +120,6 @@ function showToast(text) {
   }, 3000);
 }
 
-// Проверка доступа к чату (участник ли или создатель)
 function canUserAccessChat(event) {
   if (!currentUser || !event) return false;
   const currentUserName = getUserDisplayName(currentUser);
@@ -127,6 +130,58 @@ function canUserAccessChat(event) {
   
   return isAttending || isCreator;
 }
+
+// ==========================================
+// PWA УСТАНОВКА И УПРАВЛЕНИЕ КНОПКОЙ
+// ==========================================
+
+// Ловим стандартный запрос на установку (Android / Chrome)
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (installAppBtn) {
+    installAppBtn.classList.remove('hidden');
+  }
+});
+
+// Проверка устройства на iOS
+const isIos = () => {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  return /iphone|ipad|ipod/.test(userAgent);
+};
+
+// Проверка, запущено ли приложение уже как PWA
+const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
+
+if (installAppBtn) {
+  // На iOS сразу показываем кнопку (если приложение открыто в браузерной вкладке Safari)
+  if (isIos() && !isInStandaloneMode()) {
+    installAppBtn.classList.remove('hidden');
+  }
+
+  installAppBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      // Стандартная установка для Android
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        showToast('Приложение успешно установлено!');
+      }
+      deferredPrompt = null;
+      installAppBtn.classList.add('hidden');
+    } else if (isIos()) {
+      // Подсказка для пользователей iPhone / iPad
+      alert('Чтобы установить приложение на iPhone:\n1. Нажмите кнопку "Поделиться" (иконка квадрата со стрелкой внизу)\n2. Выберите "На экран «Домой»"');
+    }
+  });
+}
+
+// Если приложение уже успешно установлено — скрываем кнопку
+window.addEventListener('appinstalled', () => {
+  if (installAppBtn) installAppBtn.classList.add('hidden');
+  deferredPrompt = null;
+  showToast('Приложение добавлено на главный экран!');
+});
 
 // ==========================================
 // АВТОРИЗАЦИЯ И ПРОФИЛЬ
@@ -282,7 +337,6 @@ function renderEvents() {
     const isCreator = currentUser && event.creator_id === currentUser.id;
     const canAccessChat = isAttending || isCreator;
 
-    // Учёт лимита участников
     const maxParticipants = event.max_participants ? parseInt(event.max_participants, 10) : null;
     const isFull = maxParticipants ? participants.length >= maxParticipants : false;
     const countText = maxParticipants ? `${participants.length} / ${maxParticipants}` : `${participants.length}`;
@@ -299,7 +353,6 @@ function renderEvents() {
          </div>`
       : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался${maxParticipants ? ` (макс. ${maxParticipants})` : ''}</div>`;
 
-    // Формирование кнопки записи
     let attendanceBtnHtml = '';
     if (isAttending) {
       attendanceBtnHtml = `
@@ -396,7 +449,6 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
   const participantName = getUserDisplayName(currentUser);
   let updatedParticipants = [...currentParticipants];
 
-  // Ищем событие и считываем лимит
   const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
   const maxParticipants = (targetEvent && targetEvent.max_participants !== null && targetEvent.max_participants !== undefined)
     ? Number(targetEvent.max_participants)
@@ -407,7 +459,6 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
   if (isAlreadyAttending) {
     updatedParticipants = updatedParticipants.filter(p => p !== participantName);
   } else {
-    // Проверка на клиенте перед отправкой
     if (maxParticipants !== null && !isNaN(maxParticipants) && updatedParticipants.length >= maxParticipants) {
       showToast('🔒 К сожалению, все места уже заняты!');
       return;
@@ -422,16 +473,14 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
       .eq('id', eventId);
 
     if (error) {
-      // Если база данных вернула ошибку ограничения лимита
       if (error.message && error.message.includes('check_max_participants')) {
         showToast('🔒 Все места уже заняты!');
-        await loadEvents(); // Обновляем список, чтобы кнопка стала "Мест нет"
+        await loadEvents();
         return;
       }
       throw error;
     }
     
-    // Если пользователь отменил участие и открыт чат — закрываем чат
     if (currentChatEventId === eventId && !updatedParticipants.includes(participantName)) {
       closeChatModalWindow();
     }
@@ -493,7 +542,6 @@ async function markMessagesAsRead(messages) {
 
   const currentUserId = currentUser.id;
 
-  // Отбираем чужие сообщения, где мы еще не отмечены в read_by
   const unreadMessages = messages.filter(msg => {
     if (msg.user_id === currentUserId) return false;
     const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
@@ -502,7 +550,6 @@ async function markMessagesAsRead(messages) {
 
   if (unreadMessages.length === 0) return;
 
-  // Обновляем каждое сообщение отдельно аккуратным запросом
   for (const msg of unreadMessages) {
     const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
     const updatedReadList = [...readList, currentUserId];
@@ -573,7 +620,6 @@ function renderMessages(messages) {
 
     const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Формирование галочек прочтения
     let statusHtml = '';
     if (isMine) {
       const readList = Array.isArray(msg.read_by) ? msg.read_by : [];
@@ -679,7 +725,6 @@ function subscribeToEvents() {
     .subscribe();
 }
 
-// Подписка на сообщения и обновления конкретного ивента
 function subscribeToChatMessages(eventId) {
   if (!supabaseClient) return;
 
@@ -692,7 +737,7 @@ function subscribeToChatMessages(eventId) {
     .on(
       'postgres_changes',
       {
-        event: '*', // Слушаем INSERT и UPDATE (для отслеживания статусов)
+        event: '*',
         schema: 'public',
         table: 'event_messages',
         filter: `event_id=eq.${eventId}`
@@ -706,7 +751,6 @@ function subscribeToChatMessages(eventId) {
     .subscribe();
 }
 
-// Восстановление соединения при возврате во вкладку браузера
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && currentChatEventId) {
     loadChatMessages(currentChatEventId);
