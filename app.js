@@ -68,7 +68,21 @@ const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatMessagesContainer = document.getElementById('chatMessages');
 
+// Модалка Калькулятора
+const calcModal = document.getElementById('calcModal');
+const closeCalcModal = document.getElementById('closeCalcModal');
+const calcPayerSelect = document.getElementById('calcPayer');
+const calcItemsContainer = document.getElementById('calcItemsContainer');
+const addCalcItemBtn = document.getElementById('addCalcItemBtn');
+const calculateBtn = document.getElementById('calculateBtn');
+const calcResult = document.getElementById('calcResult');
+const calcResultList = document.getElementById('calcResultList');
+const sendCalcToChatBtn = document.getElementById('sendCalcToChatBtn');
+
 let isSignUpMode = false;
+let currentCalcParticipants = [];
+let calcItemsCount = 0;
+let lastCalculatedText = '';
 
 // ==========================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -93,7 +107,19 @@ function getUserDisplayName(user) {
   );
 }
 
-// ИСПРАВЛЕННАЯ ФУНКЦИЯ ФОРМАТИРОВАНИЯ ДАТЫ И ВРЕМЕНИ
+// Преобразование UUID/идентификатора участника в отображаемое имя
+function resolveParticipantName(p) {
+  if (!p) return 'Участник';
+  if (currentUser && (p === currentUser.id || p === currentUser.email)) {
+    return getUserDisplayName(currentUser);
+  }
+  if (typeof p === 'string' && p.length === 36 && p.includes('-')) {
+    return `Участник (${p.substring(0, 6)}...)`;
+  }
+  return String(p);
+}
+
+// ФОРМАТИРОВАНИЕ ДАТЫ И ВРЕМЕНИ
 function formatDate(dateString) {
   if (!dateString) return 'Дата не указана';
 
@@ -102,13 +128,11 @@ function formatDate(dateString) {
     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
   ];
 
-  // 1. Если передана только дата формата YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     const [year, month, day] = dateString.split('-').map(Number);
     return `${day} ${months[month - 1]}`;
   }
 
-  // 2. Если дата пришла в формате datetime-local (YYYY-MM-DDTHH:mm)
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateString)) {
     const [datePart, timePart] = dateString.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
@@ -116,7 +140,6 @@ function formatDate(dateString) {
     return `${day} ${months[month - 1]} в ${hours}:${minutes}`;
   }
 
-  // 3. Резервный парсинг для стандартного ISO/Date объекта
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
 
@@ -140,9 +163,11 @@ function showToast(text) {
 function canUserAccessChat(event) {
   if (!currentUser || !event) return false;
   const currentUserName = getUserDisplayName(currentUser);
-  const participants = Array.isArray(event.participants) ? event.participants : [];
+  const rawParticipants = Array.isArray(event.participants) ? event.participants : [];
   
-  const isAttending = participants.includes(currentUserName);
+  const isAttending = rawParticipants.some(p => 
+    p === currentUserName || p === currentUser.id || p === currentUser.email
+  );
   const isCreator = event.creator_id === currentUser.id;
   
   return isAttending || isCreator;
@@ -345,23 +370,24 @@ function renderEvents() {
   const currentUserName = getUserDisplayName(currentUser);
 
   eventsList.innerHTML = filteredEvents.map(event => {
-    const participants = Array.isArray(event.participants) ? event.participants : [];
-    const isAttending = currentUser && participants.includes(currentUserName);
+    const rawParticipants = Array.isArray(event.participants) ? event.participants : [];
+    
+    // Проверяем участие по имени, id или email
+    const isAttending = currentUser && rawParticipants.some(p => 
+      p === currentUserName || p === currentUser.id || p === currentUser.email
+    );
     const isCreator = currentUser && event.creator_id === currentUser.id;
     const canAccessChat = isAttending || isCreator;
 
     const maxParticipants = event.max_participants ? parseInt(event.max_participants, 10) : null;
-    const isFull = maxParticipants ? participants.length >= maxParticipants : false;
-    const countText = maxParticipants ? `${participants.length} / ${maxParticipants}` : `${participants.length}`;
+    const isFull = maxParticipants ? rawParticipants.length >= maxParticipants : false;
+    const countText = maxParticipants ? `${rawParticipants.length} / ${maxParticipants}` : `${rawParticipants.length}`;
 
-    const formattedParticipantsHtml = participants.length > 0
+    const formattedParticipantsHtml = rawParticipants.length > 0
       ? `<div style="margin-top: 0.8rem;">
            <span style="font-weight: 600;">👥 Идут (${countText}):</span>
            <ul style="margin: 0.4rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #e2e8f0;">
-             ${participants.map(p => {
-               const displayName = (p && p.length === 36 && p.includes('-')) ? 'Участник' : escapeHtml(p);
-               return `<li style="margin-bottom: 0.2rem;">${displayName}</li>`;
-             }).join('')}
+             ${rawParticipants.map(p => `<li style="margin-bottom: 0.2rem;">${escapeHtml(resolveParticipantName(p))}</li>`).join('')}
            </ul>
          </div>`
       : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался${maxParticipants ? ` (макс. ${maxParticipants})` : ''}</div>`;
@@ -372,7 +398,7 @@ function renderEvents() {
         <button 
           class="btn btn-outline" 
           style="flex: 1;"
-          onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
+          onclick="toggleAttendance('${event.id}', ${JSON.stringify(rawParticipants).replace(/"/g, '&quot;')})"
         >
           Отменить участие
         </button>`;
@@ -390,7 +416,7 @@ function renderEvents() {
         <button 
           class="btn btn-primary" 
           style="flex: 1;"
-          onclick="toggleAttendance('${event.id}', ${JSON.stringify(participants).replace(/"/g, '&quot;')})"
+          onclick="toggleAttendance('${event.id}', ${JSON.stringify(rawParticipants).replace(/"/g, '&quot;')})"
         >
           Пойду
         </button>`;
@@ -416,7 +442,7 @@ function renderEvents() {
 
         ${formattedParticipantsHtml}
 
-        <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem; display: flex; gap: 0.5rem;">
+        <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
           ${attendanceBtnHtml}
           
           ${canAccessChat ? `
@@ -426,6 +452,13 @@ function renderEvents() {
               data-title="${escapeHtml(event.title)}"
             >
               💬 Чат
+            </button>
+            <button 
+              class="btn btn-outline" 
+              onclick="openCalculator('${event.id}')"
+              title="Посчитать чек"
+            >
+              🧮 Сплит
             </button>
           ` : ''}
         </div>
@@ -467,10 +500,14 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
     ? Number(targetEvent.max_participants)
     : null;
 
-  const isAlreadyAttending = updatedParticipants.includes(participantName);
+  const isAlreadyAttending = updatedParticipants.some(p => 
+    p === participantName || p === currentUser.id || p === currentUser.email
+  );
 
   if (isAlreadyAttending) {
-    updatedParticipants = updatedParticipants.filter(p => p !== participantName);
+    updatedParticipants = updatedParticipants.filter(p => 
+      p !== participantName && p !== currentUser.id && p !== currentUser.email
+    );
   } else {
     if (maxParticipants !== null && !isNaN(maxParticipants) && updatedParticipants.length >= maxParticipants) {
       showToast('🔒 К сожалению, все места уже заняты!');
@@ -494,7 +531,7 @@ window.toggleAttendance = async function(eventId, currentParticipants = []) {
       throw error;
     }
     
-    if (currentChatEventId === eventId && !updatedParticipants.includes(participantName)) {
+    if (currentChatEventId === eventId && !updatedParticipants.some(p => p === participantName || p === currentUser.id)) {
       closeChatModalWindow();
     }
 
@@ -716,6 +753,190 @@ document.addEventListener('click', (e) => {
     }
   }
 });
+
+// ==========================================
+// ЛОГИКА КАЛЬКУЛЯТОРА РАЗДЕЛЕНИЯ СЧЕТА
+// ==========================================
+
+window.openCalculator = function(eventId) {
+  const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
+  if (!targetEvent) return;
+
+  const rawParticipants = Array.isArray(targetEvent.participants) ? targetEvent.participants : [];
+  if (rawParticipants.length === 0) {
+    alert('В этой встрече пока нет участников!');
+    return;
+  }
+
+  // Преобразуем UUID в понятные имена для списка расчета
+  currentCalcParticipants = rawParticipants.map(p => resolveParticipantName(p));
+  currentChatEventId = eventId;
+
+  refreshCalcParticipantsUI();
+
+  if (calcItemsContainer) {
+    calcItemsContainer.innerHTML = '';
+    calcItemsCount = 0;
+    addCalcItemRow();
+  }
+
+  if (calcResult) calcResult.style.display = 'none';
+  if (sendCalcToChatBtn) sendCalcToChatBtn.classList.add('hidden');
+  if (calcModal) calcModal.classList.remove('hidden');
+};
+
+function refreshCalcParticipantsUI() {
+  if (calcPayerSelect) {
+    calcPayerSelect.innerHTML = currentCalcParticipants.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  }
+}
+
+window.addExtraParticipant = function() {
+  const guestName = prompt('Введите имя гостя (кто не был записан):');
+  if (!guestName || !guestName.trim()) return;
+
+  const trimmed = guestName.trim();
+  if (currentCalcParticipants.includes(trimmed)) {
+    alert('Участник с таким именем уже есть!');
+    return;
+  }
+
+  currentCalcParticipants.push(trimmed);
+  refreshCalcParticipantsUI();
+  
+  // Добавляем чекбокс нового участника во все действующие позиционные строки
+  document.querySelectorAll('.calc-item-row .checkbox-group').forEach(group => {
+    const label = document.createElement('label');
+    label.style.cssText = 'font-size: 0.8rem; margin-right: 0.6rem; cursor: pointer; white-space: nowrap;';
+    label.innerHTML = `<input type="checkbox" class="participant-checkbox" value="${escapeHtml(trimmed)}" checked> ${escapeHtml(trimmed)}`;
+    group.appendChild(label);
+  });
+};
+
+function addCalcItemRow() {
+  calcItemsCount++;
+  const row = document.createElement('div');
+  row.className = 'calc-item-row';
+  row.style.cssText = 'background: #1e293b; border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.75rem;';
+
+  const checkboxesHtml = currentCalcParticipants.map(p => `
+    <label style="font-size: 0.8rem; margin-right: 0.6rem; cursor: pointer; white-space: nowrap;">
+      <input type="checkbox" class="participant-checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}
+    </label>
+  `).join('');
+
+  row.innerHTML = `
+    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; align-items: center;">
+      <input type="text" placeholder="Название (Кальян/Чай)" class="item-name" style="flex: 2 1 140px; min-width: 120px; padding: 0.4rem; font-size: 0.85rem; border-radius: 0.375rem; border: 1px solid #475569; background: #0f172a; color: white;">
+      <input type="number" placeholder="Цена ₽" class="item-price" style="flex: 1 1 80px; min-width: 70px; padding: 0.4rem; font-size: 0.85rem; border-radius: 0.375rem; border: 1px solid #475569; background: #0f172a; color: white;">
+      <input type="number" placeholder="Кол-во" value="1" min="1" class="item-qty" style="width: 60px; padding: 0.4rem; font-size: 0.85rem; border-radius: 0.375rem; border: 1px solid #475569; background: #0f172a; color: white;">
+      <button class="btn btn-danger btn-sm" onclick="this.parentElement.parentElement.remove()" style="padding: 0.4rem 0.6rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">✕</button>
+    </div>
+    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem;">Кто позицию разделяет:</div>
+    <div class="checkbox-group" style="display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 80px; overflow-y: auto;">
+      ${checkboxesHtml}
+    </div>
+  `;
+
+  if (calcItemsContainer) calcItemsContainer.appendChild(row);
+}
+
+if (addCalcItemBtn) {
+  addCalcItemBtn.addEventListener('click', addCalcItemRow);
+}
+
+if (calculateBtn) {
+  calculateBtn.addEventListener('click', () => {
+    if (!calcPayerSelect || !calcItemsContainer) return;
+    const payer = calcPayerSelect.value;
+    const itemRows = calcItemsContainer.querySelectorAll('.calc-item-row');
+
+    if (itemRows.length === 0) {
+      alert('Добавьте хотя бы одну позицию!');
+      return;
+    }
+
+    const totals = {};
+    currentCalcParticipants.forEach(p => totals[p] = 0);
+    let grandTotal = 0;
+
+    for (let row of itemRows) {
+      const price = parseFloat(row.querySelector('.item-price').value) || 0;
+      const qty = parseInt(row.querySelector('.item-qty').value, 10) || 1;
+      const checked = Array.from(row.querySelectorAll('.participant-checkbox:checked')).map(cb => cb.value);
+
+      if (price > 0 && checked.length > 0) {
+        const itemTotal = price * qty;
+        grandTotal += itemTotal;
+        const share = itemTotal / checked.length;
+        checked.forEach(p => {
+          if (totals[p] !== undefined) totals[p] += share;
+        });
+      }
+    }
+
+    if (grandTotal === 0) {
+      alert('Заполните цены и количества позиций!');
+      return;
+    }
+
+    let resultHtml = `<div style="margin-bottom: 0.4rem;">💳 Общий чек: <b>${Math.round(grandTotal)} ₽</b></div>`;
+    resultHtml += `<div style="margin-bottom: 0.4rem;">👤 Оплатил(а): <b>${escapeHtml(payer)}</b></div><hr style="border-color: var(--border-color); margin: 0.4rem 0;">`;
+    
+    let chatMessageText = `🧾 *Расчет по чеку (${Math.round(grandTotal)} ₽)*\nОплатил: ${payer}\n\n*Кто сколько должен:*`;
+
+    Object.keys(totals).forEach(person => {
+      const amount = Math.round(totals[person]);
+      if (person !== payer) {
+        resultHtml += `<div>• <b>${escapeHtml(person)}</b> ➔ ${escapeHtml(payer)}: <b>${amount} ₽</b></div>`;
+        chatMessageText += `\n• ${person} ➔ ${payer}: ${amount} ₽`;
+      } else {
+        resultHtml += `<div style="color: var(--text-muted);">• ${escapeHtml(person)} (доля в чеке: ${amount} ₽)</div>`;
+      }
+    });
+
+    if (calcResultList) calcResultList.innerHTML = resultHtml;
+    if (calcResult) calcResult.style.display = 'block';
+
+    lastCalculatedText = chatMessageText;
+    if (sendCalcToChatBtn) sendCalcToChatBtn.classList.remove('hidden');
+  });
+}
+
+if (sendCalcToChatBtn) {
+  sendCalcToChatBtn.addEventListener('click', async () => {
+    if (!lastCalculatedText || !currentChatEventId || !currentUser) return;
+
+    try {
+      const displayName = getUserDisplayName(currentUser);
+      const payload = {
+        event_id: currentChatEventId,
+        text: lastCalculatedText,
+        user_id: currentUser.id,
+        user_email: currentUser.email,
+        user_name: displayName,
+        read_by: [currentUser.id]
+      };
+
+      const { error } = await supabaseClient
+        .from('event_messages')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      showToast('Расчет отправлен в чат встречи!');
+      if (calcModal) calcModal.classList.add('hidden');
+    } catch (err) {
+      alert('Ошибка отправки в чат: ' + err.message);
+    }
+  });
+}
+
+if (closeCalcModal) {
+  closeCalcModal.addEventListener('click', () => {
+    if (calcModal) calcModal.classList.add('hidden');
+  });
+}
 
 // ==========================================
 // REALTIME СЛУШАТЕЛИ

@@ -321,6 +321,44 @@
     </div>
   </div>
 
+  <!-- МОДАЛКА КАЛЬКУЛЯТОРА СЧЕТА -->
+  <div id="calcModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 550px;">
+      <h3 id="calcTitle">🧮 Калькулятор счета</h3>
+      
+      <!-- Кто оплатил и добавление незаписанных участников -->
+      <div style="display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 1rem;">
+        <div style="flex: 1;">
+          <label for="calcPayer" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Кто оплатил весь чек?</label>
+          <select id="calcPayer" style="width: 100%; padding: 0.6rem; background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 0.4rem;"></select>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="addExtraParticipant()" style="white-space: nowrap; padding: 0.6rem 0.8rem;" title="Добавить участника, не записанного на встречу">
+          + Гость
+        </button>
+      </div>
+
+      <!-- Список позиций -->
+      <div id="calcItemsContainer" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; max-height: 320px; overflow-y: auto; padding-right: 4px;">
+        <!-- Динамические строки позиций -->
+      </div>
+
+      <button id="addCalcItemBtn" class="btn btn-secondary" style="width: 100%; margin-bottom: 1rem;">+ Добавить позицию</button>
+
+      <!-- Итоги -->
+      <div id="calcResult" style="background: var(--bg-main); padding: 0.8rem; border-radius: 0.5rem; border: 1px solid var(--border-color); margin-bottom: 1rem; display: none;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #38bdf8;">Расчет долгов:</h4>
+        <div id="calcResultList" style="font-size: 0.9rem; line-height: 1.4;"></div>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem;">
+        <button id="calculateBtn" class="btn btn-primary" style="flex: 1;">Посчитать</button>
+        <button id="sendCalcToChatBtn" class="btn btn-primary hidden" style="background: #10b981;">Отправить в чат</button>
+      </div>
+      
+      <button id="closeCalcModal" class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;">Закрыть</button>
+    </div>
+  </div>
+
   <!-- Всплывающее уведомление -->
   <div id="toast" class="hidden"></div>
 
