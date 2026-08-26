@@ -89,6 +89,31 @@
     .btn-secondary { background: var(--border-color); color: var(--text-main); }
     .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
 
+    /* НОВЫЕ СТИЛИ ДЛЯ КНОПОК СТАТУСА */
+    .btn-status {
+      flex: 1;
+      padding: 0.5rem;
+      border: 1px solid var(--border-color);
+      background: rgba(17, 24, 39, 0.4);
+      color: var(--text-muted);
+      border-radius: 0.5rem;
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-status.active-yes { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-color: #3b82f6; }
+    .btn-status.active-maybe { background: rgba(250, 204, 21, 0.15); color: #facc15; border-color: #facc15; }
+    .btn-status.active-declined { background: rgba(248, 113, 113, 0.15); color: #f87171; border-color: #f87171; }
+    
+    .participants-section {
+      margin: 1rem 0;
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
     .hidden { display: none !important; }
 
     .user-profile-box {

@@ -368,59 +368,57 @@ function renderEvents() {
   }
 
   const currentUserName = getUserDisplayName(currentUser);
+  const currentUserId = currentUser ? currentUser.id : null;
 
   eventsList.innerHTML = filteredEvents.map(event => {
     const rawParticipants = Array.isArray(event.participants) ? event.participants : [];
-    
-    // Проверяем участие по имени, id или email
+    const rawMaybe = Array.isArray(event.maybe_participants) ? event.maybe_participants : [];
+    const rawDeclined = Array.isArray(event.declined_participants) ? event.declined_participants : [];
+
+    // Проверяем текущий статус пользователя
     const isAttending = currentUser && rawParticipants.some(p => 
       p === currentUserName || p === currentUser.id || p === currentUser.email
     );
+    const isMaybe = currentUser && rawMaybe.some(p => 
+      p === currentUserName || p === currentUser.id || p === currentUser.email
+    );
+    const isDeclined = currentUser && rawDeclined.some(p => 
+      p === currentUserName || p === currentUser.id || p === currentUser.email
+    );
+
     const isCreator = currentUser && event.creator_id === currentUser.id;
     const canAccessChat = isAttending || isCreator;
 
     const maxParticipants = event.max_participants ? parseInt(event.max_participants, 10) : null;
-    const isFull = maxParticipants ? rawParticipants.length >= maxParticipants : false;
     const countText = maxParticipants ? `${rawParticipants.length} / ${maxParticipants}` : `${rawParticipants.length}`;
 
-    const formattedParticipantsHtml = rawParticipants.length > 0
-      ? `<div style="margin-top: 0.8rem;">
-           <span style="font-weight: 600;">👥 Идут (${countText}):</span>
-           <ul style="margin: 0.4rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #e2e8f0;">
-             ${rawParticipants.map(p => `<li style="margin-bottom: 0.2rem;">${escapeHtml(resolveParticipantName(p))}</li>`).join('')}
+    // Секции списков участников по категориям
+    const yesParticipantsHtml = rawParticipants.length > 0
+      ? `<div style="margin-top: 0.6rem;">
+           <span style="font-weight: 600; color: #3b82f6;">👥 Идут (${countText}):</span>
+           <ul style="margin: 0.2rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #e2e8f0; font-size: 0.9rem;">
+             ${rawParticipants.map(p => `<li>${escapeHtml(resolveParticipantName(p))}</li>`).join('')}
            </ul>
          </div>`
-      : `<div style="margin-top: 0.8rem; color: #94a3b8;">👥 Пока никто не записался${maxParticipants ? ` (макс. ${maxParticipants})` : ''}</div>`;
+      : `<div style="margin-top: 0.6rem; color: #94a3b8; font-size: 0.85rem;">👥 Пока никто не записался${maxParticipants ? ` (макс. ${maxParticipants})` : ''}</div>`;
 
-    let attendanceBtnHtml = '';
-    if (isAttending) {
-      attendanceBtnHtml = `
-        <button 
-          class="btn btn-outline" 
-          style="flex: 1;"
-          onclick="toggleAttendance('${event.id}', ${JSON.stringify(rawParticipants).replace(/"/g, '&quot;')})"
-        >
-          Отменить участие
-        </button>`;
-    } else if (isFull) {
-      attendanceBtnHtml = `
-        <button 
-          class="btn btn-secondary" 
-          style="flex: 1; opacity: 0.7; cursor: not-allowed;" 
-          disabled
-        >
-          Мест нет 🔒
-        </button>`;
-    } else {
-      attendanceBtnHtml = `
-        <button 
-          class="btn btn-primary" 
-          style="flex: 1;"
-          onclick="toggleAttendance('${event.id}', ${JSON.stringify(rawParticipants).replace(/"/g, '&quot;')})"
-        >
-          Пойду
-        </button>`;
-    }
+    const maybeParticipantsHtml = rawMaybe.length > 0
+      ? `<div style="margin-top: 0.5rem;">
+           <span style="font-weight: 600; color: #facc15;">🤔 Возможно (${rawMaybe.length}):</span>
+           <ul style="margin: 0.2rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #cbd5e1; font-size: 0.85rem;">
+             ${rawMaybe.map(p => `<li>${escapeHtml(resolveParticipantName(p))}</li>`).join('')}
+           </ul>
+         </div>`
+      : '';
+
+    const declinedParticipantsHtml = rawDeclined.length > 0
+      ? `<div style="margin-top: 0.5rem;">
+           <span style="font-weight: 600; color: #f87171;">❌ Не пойдут (${rawDeclined.length}):</span>
+           <ul style="margin: 0.2rem 0 0 1.2rem; padding: 0; list-style-type: disc; color: #94a3b8; font-size: 0.85rem;">
+             ${rawDeclined.map(p => `<li>${escapeHtml(resolveParticipantName(p))}</li>`).join('')}
+           </ul>
+         </div>`
+      : '';
 
     return `
       <div class="event-card" style="background: #1e293b; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #334155; position: relative;">
@@ -440,14 +438,38 @@ function renderEvents() {
         
         ${event.description ? `<p style="margin: 0.5rem 0; color: #cbd5e1;">${escapeHtml(event.description)}</p>` : ''}
 
-        ${formattedParticipantsHtml}
+        <div class="participants-section" style="margin-top: 0.8rem;">
+          ${yesParticipantsHtml}
+          ${maybeParticipantsHtml}
+          ${declinedParticipantsHtml}
+        </div>
 
-        <div style="margin-top: 1rem; border-top: 1px solid #334155; padding-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          ${attendanceBtnHtml}
-          
-          ${canAccessChat ? `
+        <!-- КНОПКИ ВЫБОРА СТАТУСА ПРИСУТСТВИЯ -->
+        <div style="display: flex; gap: 0.4rem; margin-top: 1rem;">
+          <button 
+            onclick="updateEventStatus('${event.id}', '${isAttending ? 'none' : 'yes'}')"
+            class="btn-status ${isAttending ? 'active-yes' : ''}">
+            ${isAttending ? '✓ Пойду' : 'Пойду'}
+          </button>
+
+          <button 
+            onclick="updateEventStatus('${event.id}', '${isMaybe ? 'none' : 'maybe'}')"
+            class="btn-status ${isMaybe ? 'active-maybe' : ''}">
+            ${isMaybe ? '✓ Возможно' : 'Возможно'}
+          </button>
+
+          <button 
+            onclick="updateEventStatus('${event.id}', '${isDeclined ? 'none' : 'declined'}')"
+            class="btn-status ${isDeclined ? 'active-declined' : ''}">
+            ${isDeclined ? '✓ Не пойду' : 'Не пойду'}
+          </button>
+        </div>
+
+        ${canAccessChat ? `
+          <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem;">
             <button 
               class="btn btn-secondary open-chat-btn" 
+              style="flex: 1;"
               data-id="${event.id}"
               data-title="${escapeHtml(event.title)}"
             >
@@ -460,15 +482,81 @@ function renderEvents() {
             >
               🧮 Сплит
             </button>
-          ` : ''}
-        </div>
+          </div>
+        ` : ''}
       </div>
     `;
   }).join('');
 }
 
 // ==========================================
-// ЛОГИКА УДАЛЕНИЯ И ЗАПИСИ
+// ЛОГИКА ОБНОВЛЕНИЯ СТАТУСА УЧАСТИЯ
+// ==========================================
+
+async function updateEventStatus(eventId, newStatus) {
+  if (!currentUser) {
+    if (authModal) authModal.classList.remove('hidden');
+    return;
+  }
+
+  const userIdentifier = getUserDisplayName(currentUser);
+
+  try {
+    const { data: event, error: fetchError } = await supabaseClient
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let participants = Array.isArray(event.participants) ? [...event.participants] : [];
+    let maybeParticipants = Array.isArray(event.maybe_participants) ? [...event.maybe_participants] : [];
+    let declinedParticipants = Array.isArray(event.declined_participants) ? [...event.declined_participants] : [];
+
+    // Очищаем текущего пользователя из всех трех списков
+    participants = participants.filter(p => p !== userIdentifier && p !== currentUser.id && p !== currentUser.email);
+    maybeParticipants = maybeParticipants.filter(p => p !== userIdentifier && p !== currentUser.id && p !== currentUser.email);
+    declinedParticipants = declinedParticipants.filter(p => p !== userIdentifier && p !== currentUser.id && p !== currentUser.email);
+
+    // Добавляем в целевой список при соответствующем статусе
+    if (newStatus === 'yes') {
+      const maxParticipants = event.max_participants ? parseInt(event.max_participants, 10) : null;
+      if (maxParticipants && participants.length >= maxParticipants) {
+        showToast('🔒 К сожалению, все места уже заняты!');
+        return;
+      }
+      participants.push(userIdentifier);
+    } else if (newStatus === 'maybe') {
+      maybeParticipants.push(userIdentifier);
+    } else if (newStatus === 'declined') {
+      declinedParticipants.push(userIdentifier);
+    }
+
+    const { error: updateError } = await supabaseClient
+      .from('events')
+      .update({
+        participants: participants,
+        maybe_participants: maybeParticipants,
+        declined_participants: declinedParticipants
+      })
+      .eq('id', eventId);
+
+    if (updateError) throw updateError;
+
+    // Если открыт чат встречи и пользователь больше не участвует
+    if (currentChatEventId === eventId && newStatus !== 'yes' && event.creator_id !== currentUser.id) {
+      closeChatModalWindow();
+    }
+
+    await loadEvents();
+  } catch (err) {
+    alert('Не удалось обновить статус: ' + err.message);
+  }
+}
+
+// ==========================================
+// ЛОГИКА УДАЛЕНИЯ ВСТРЕЧИ
 // ==========================================
 
 window.deleteEvent = async function(eventId) {
@@ -483,61 +571,6 @@ window.deleteEvent = async function(eventId) {
     await loadEvents();
   } catch (err) {
     alert('Не удалось удалить встречу: ' + err.message);
-  }
-};
-
-window.toggleAttendance = async function(eventId, currentParticipants = []) {
-  if (!currentUser) {
-    if (authModal) authModal.classList.remove('hidden');
-    return;
-  }
-
-  const participantName = getUserDisplayName(currentUser);
-  let updatedParticipants = [...currentParticipants];
-
-  const targetEvent = allEvents.find(e => String(e.id) === String(eventId));
-  const maxParticipants = (targetEvent && targetEvent.max_participants !== null && targetEvent.max_participants !== undefined)
-    ? Number(targetEvent.max_participants)
-    : null;
-
-  const isAlreadyAttending = updatedParticipants.some(p => 
-    p === participantName || p === currentUser.id || p === currentUser.email
-  );
-
-  if (isAlreadyAttending) {
-    updatedParticipants = updatedParticipants.filter(p => 
-      p !== participantName && p !== currentUser.id && p !== currentUser.email
-    );
-  } else {
-    if (maxParticipants !== null && !isNaN(maxParticipants) && updatedParticipants.length >= maxParticipants) {
-      showToast('🔒 К сожалению, все места уже заняты!');
-      return;
-    }
-    updatedParticipants.push(participantName);
-  }
-
-  try {
-    const { error } = await supabaseClient
-      .from('events')
-      .update({ participants: updatedParticipants })
-      .eq('id', eventId);
-
-    if (error) {
-      if (error.message && error.message.includes('check_max_participants')) {
-        showToast('🔒 Все места уже заняты!');
-        await loadEvents();
-        return;
-      }
-      throw error;
-    }
-    
-    if (currentChatEventId === eventId && !updatedParticipants.some(p => p === participantName || p === currentUser.id)) {
-      closeChatModalWindow();
-    }
-
-    await loadEvents();
-  } catch (err) {
-    alert('Не удалось обновить запись: ' + err.message);
   }
 };
 
@@ -564,7 +597,9 @@ if (eventForm) {
       max_participants: maxParticipantsVal ? parseInt(maxParticipantsVal, 10) : null,
       creator_id: currentUser.id,
       creator_name: creatorName,
-      participants: [creatorName]
+      participants: [creatorName],
+      maybe_participants: [],
+      declined_participants: []
     };
 
     try {
@@ -764,7 +799,7 @@ window.openCalculator = function(eventId) {
 
   const rawParticipants = Array.isArray(targetEvent.participants) ? targetEvent.participants : [];
   if (rawParticipants.length === 0) {
-    alert('В этой встрече пока нет участников!');
+    alert('В этой встрече пока нет подтвержденных участников!');
     return;
   }
 
@@ -804,10 +839,10 @@ window.addExtraParticipant = function() {
   currentCalcParticipants.push(trimmed);
   refreshCalcParticipantsUI();
   
-  // Добавляем чекбокс нового участника во все действующие позиционные строки
+  // Добавляем чекбокс нового участника в виде столбца во все действующие позиционные строки
   document.querySelectorAll('.calc-item-row .checkbox-group').forEach(group => {
     const label = document.createElement('label');
-    label.style.cssText = 'font-size: 0.8rem; margin-right: 0.6rem; cursor: pointer; white-space: nowrap;';
+    label.style.cssText = 'font-size: 0.85rem; margin-bottom: 0.3rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;';
     label.innerHTML = `<input type="checkbox" class="participant-checkbox" value="${escapeHtml(trimmed)}" checked> ${escapeHtml(trimmed)}`;
     group.appendChild(label);
   });
@@ -819,8 +854,9 @@ function addCalcItemRow() {
   row.className = 'calc-item-row';
   row.style.cssText = 'background: #1e293b; border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.75rem;';
 
+  // Выстраивание каждого участника в строго отдельную строку списка
   const checkboxesHtml = currentCalcParticipants.map(p => `
-    <label style="font-size: 0.8rem; margin-right: 0.6rem; cursor: pointer; white-space: nowrap;">
+    <label style="font-size: 0.85rem; margin-bottom: 0.3rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
       <input type="checkbox" class="participant-checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}
     </label>
   `).join('');
@@ -832,8 +868,8 @@ function addCalcItemRow() {
       <input type="number" placeholder="Кол-во" value="1" min="1" class="item-qty" style="width: 60px; padding: 0.4rem; font-size: 0.85rem; border-radius: 0.375rem; border: 1px solid #475569; background: #0f172a; color: white;">
       <button class="btn btn-danger btn-sm" onclick="this.parentElement.parentElement.remove()" style="padding: 0.4rem 0.6rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">✕</button>
     </div>
-    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem;">Кто позицию разделяет:</div>
-    <div class="checkbox-group" style="display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 80px; overflow-y: auto;">
+    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem;">Кто позицию разделяет:</div>
+    <div class="checkbox-group" style="display: flex; flex-direction: column; max-height: 140px; overflow-y: auto; padding-right: 0.2rem;">
       ${checkboxesHtml}
     </div>
   `;
