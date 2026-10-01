@@ -18,14 +18,12 @@
     :root {
       --bg: #0f172a;
       --card: #1e293b;
-      --card-2: #0b1220;
       --border: #334155;
       --text: #f8fafc;
       --muted: #94a3b8;
       --primary: #3b82f6;
       --primary-hover: #2563eb;
       --violet: #a78bfa;
-      --green: #22c55e;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -35,11 +33,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
     }
-    .wrap {
-      max-width: 480px;
-      margin: 0 auto;
-      padding: 24px 20px 40px;
-    }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 24px 20px 40px; }
     .cover {
       width: 100%;
       aspect-ratio: 1.15;
@@ -50,7 +44,6 @@
       justify-content: center;
       font-size: 96px;
       overflow: hidden;
-      position: relative;
       box-shadow: 0 10px 40px rgba(0,0,0,.35);
     }
     .cover img { width: 100%; height: 100%; object-fit: cover; }
@@ -59,82 +52,45 @@
       margin-top: 20px;
       padding: 5px 10px;
       border-radius: 8px;
-      background: rgba(167,139,250,.18);
-      color: #c4b5fd;
       font-size: 11.5px;
       font-weight: 700;
       letter-spacing: .1px;
     }
-    h1 {
-      margin: 12px 0 6px;
-      font-size: 28px;
-      font-weight: 800;
-      line-height: 1.12;
-      letter-spacing: -.5px;
-    }
-    .date {
-      color: var(--muted);
-      font-size: 15.5px;
-      font-weight: 500;
-    }
+    .chip-private { background: rgba(167,139,250,.18); color: #c4b5fd; }
+    .chip-public { background: rgba(59,130,246,.18); color: #93c5fd; }
+    h1 { margin: 12px 0 6px; font-size: 28px; font-weight: 800; line-height: 1.12; letter-spacing: -.5px; }
+    .date { color: var(--muted); font-size: 15.5px; font-weight: 500; }
     .info {
-      margin-top: 20px;
-      padding: 14px;
+      margin-top: 20px; padding: 14px;
       background: rgba(255,255,255,.04);
       border: 1px solid var(--border);
       border-radius: 16px;
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
+      display: flex; gap: 12px; align-items: flex-start;
     }
-    .info-icon {
-      width: 22px; height: 22px;
-      flex-shrink: 0;
-      color: var(--muted);
-    }
+    .info-icon { width: 22px; height: 22px; flex-shrink: 0; color: var(--muted); }
     .info-title { font-size: 15px; font-weight: 600; margin: 0; }
     .info-sub { font-size: 13px; color: var(--muted); margin: 2px 0 0; }
     .spacer { height: 14px; }
     .btn {
-      display: block;
-      width: 100%;
-      padding: 16px;
-      border-radius: 16px;
-      border: none;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
+      display: block; width: 100%; padding: 16px;
+      border-radius: 16px; border: none;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer; text-align: center; text-decoration: none;
       transition: background .2s;
     }
     .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-secondary {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      margin-top: 10px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text); margin-top: 10px;
     }
     .btn-secondary:hover { background: rgba(255,255,255,.04); }
-    .hint {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 12.5px;
-      color: var(--muted);
-    }
-    .state {
-      text-align: center;
-      padding: 60px 20px;
-    }
+    .hint { margin-top: 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
+    .state { text-align: center; padding: 60px 20px; }
     .state-icon {
-      width: 72px; height: 72px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-      font-size: 32px;
+      width: 72px; height: 72px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-bottom: 16px; font-size: 32px;
     }
     .state-error { background: rgba(255,94,107,.12); color: #ff5e6b; }
     .state-loading {
@@ -158,16 +114,15 @@
   <script>
     const SUPABASE_URL = 'https://yynwjaeqohbsgkxjuukp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_y08oAM3XLsMdlMkW7rsb2w_L5SOXMOb';
-    const APP_SCHEME = 'eventsapp://join?token=';
+    const APP_SCHEME = 'eventsapp://join';
     const MONTHS = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     const root = document.getElementById('root');
 
-    function getTokenFromUrl() {
-      // /e/<token>
+    function getParamFromUrl() {
       const parts = window.location.pathname.split('/').filter(Boolean);
       if (parts.length >= 2 && parts[0] === 'e') return parts[1];
-      // fallback: ?token=...
       const url = new URL(window.location.href);
       return url.searchParams.get('token');
     }
@@ -216,7 +171,7 @@
       `;
     }
 
-    function renderPreview(p, token) {
+    function renderPreview(p, value, isPublic) {
       const title = p.title || 'Событие';
       const category = p.category || 'Другое';
       const emoji = categoryEmoji(category);
@@ -229,6 +184,9 @@
       const count = p.participants_count || 0;
       const max = p.max_participants;
       const countStr = max ? `${count} из ${max} участников` : `${count} участников`;
+      const chipHtml = isPublic
+        ? `<span class="chip chip-public">🌍 Публичное событие</span>`
+        : `<span class="chip chip-private">✨ Частное событие</span>`;
 
       const location = p.location ? `
         <div class="info">
@@ -267,9 +225,13 @@
         </div>
       ` : '';
 
+      const appUrl = isPublic
+        ? `${APP_SCHEME}?public=${encodeURIComponent(value)}`
+        : `${APP_SCHEME}?token=${encodeURIComponent(value)}`;
+
       root.innerHTML = `
         ${coverHtml}
-        <span class="chip">✨ Частное событие</span>
+        ${chipHtml}
         <h1>${escapeHtml(title)}</h1>
         <div class="date">${escapeHtml(dateStr)}</div>
 
@@ -294,7 +256,7 @@
 
         <div style="height:28px"></div>
 
-        <a class="btn btn-primary" id="openAppBtn" href="${APP_SCHEME}${encodeURIComponent(token)}">
+        <a class="btn btn-primary" id="openAppBtn" href="${appUrl}">
           Открыть в приложении
         </a>
         <button class="btn btn-secondary" id="installBtn">
@@ -307,35 +269,48 @@
       `;
 
       document.getElementById('installBtn').addEventListener('click', () => {
-        // Android — APK / Play Store (замени, когда будет ссылка)
-        // iOS — App Store
-        const ua = navigator.userAgent.toLowerCase();
-        if (/android/.test(ua)) {
-          window.location.href = 'https://friends-events-site.vercel.app/';
-        } else if (/iphone|ipad|ipod/.test(ua)) {
-          window.location.href = 'https://friends-events-site.vercel.app/';
-        } else {
-          window.location.href = 'https://friends-events-site.vercel.app/';
-        }
+        window.location.href = 'https://friends-events-site.vercel.app/';
       });
     }
 
     async function init() {
-      const token = getTokenFromUrl();
-      if (!token) {
+      const value = getParamFromUrl();
+      if (!value) {
         renderError('Ссылка повреждена', 'В адресе нет токена приглашения.');
         return;
       }
 
       try {
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const { data, error } = await sb.rpc('preview_event_by_token', { p_token: token });
-        if (error) throw error;
+        const isPublic = UUID_RE.test(value);
+
+        let data = null;
+
+        if (isPublic) {
+          // Публичное событие — по event_id
+          const { data: pub, error: pubErr } = await sb.rpc(
+            'preview_event_public',
+            { p_event_id: value }
+          );
+          if (!pubErr && pub) data = pub;
+        } else {
+          // Приватное — по invite_token
+          const { data: priv, error: privErr } = await sb.rpc(
+            'preview_event_by_token',
+            { p_token: value }
+          );
+          if (!privErr && priv) data = priv;
+        }
+
         if (!data) {
-          renderError('Ссылка недействительна', 'Событие удалено, или ссылка устарела.');
+          renderError(
+            'Ссылка недействительна',
+            'Событие удалено, стало приватным, или ссылка устарела.'
+          );
           return;
         }
-        renderPreview(data, token);
+
+        renderPreview(data, value, isPublic);
       } catch (e) {
         console.error(e);
         renderError('Не удалось загрузить', e.message || String(e));

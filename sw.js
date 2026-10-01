@@ -1,4 +1,4 @@
-const CACHE_NAME = 'events-app-v1';
+const CACHE_NAME = 'events-app-v2';        // ← новая версия, чтобы старый кэш сбросился
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -7,39 +7,49 @@ const ASSETS_TO_CACHE = [
   '/manifest.json'
 ];
 
-// Установка Service Worker и кэширование базовых файлов
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
   self.skipWaiting();
 });
 
-// Активация
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
+    caches.keys().then((keys) =>
+      Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
+      )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Запрос ресурсов (Сеть -> Кэш)
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // 1. Приглашения /e/* и /e.html — НИКОГДА не кэшируем, всегда идём в сеть.
+  if (url.pathname.startsWith('/e/') || url.pathname === '/e.html') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 2. Навигационные запросы (HTML страницы) — network-first
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // 3. Остальное — network-first с fallback на кэш
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
 
-// Обработка входящих Web Push (наша текущая рабочая логика)
+// Web Push — без изменений
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-
   const data = event.data.json();
   const options = {
     body: data.body,
@@ -48,16 +58,10 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'general-notification',
     data: { url: data.url || '/' }
   };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
-// Клик по уведомлению
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data.url)
-  );
+  event.waitUntil(clients.openWindow(event.notification.data.url));
 });
